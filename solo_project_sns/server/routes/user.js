@@ -79,37 +79,26 @@ router.get("/:userId", async (req, res) => {
 router.post("/join", async (req, res) => {
     const { userId, pwd, userName, email, region } = req.body;
     try {
-        // 비밀번호 해시
         const hashPwd = await bcrypt.hash(pwd, 10);
 
-        // DB INSERT
+        // 먼저 회원가입만 DB에 저장 (프로필 이미지는 나중에)
         const sql = `
             INSERT INTO Users (user_id, username, email, password, region, created_at)
             VALUES (?, ?, ?, ?, ?, NOW())
         `;
         const [result] = await db.query(sql, [userId, userName, email, hashPwd, region]);
 
-        // 저장 성공 여부 확인
         if (result.affectedRows === 1) {
-            res.json({
-                result: true,
-                msg: "가입되었습니다!"
-            });
+            res.json({ result: true, msg: "가입되었습니다!" });
         } else {
-            res.json({
-                result: false,
-                msg: "가입 실패"
-            });
+            res.json({ result: false, msg: "가입 실패" });
         }
-
     } catch (error) {
         console.error(error);
-        res.json({
-            result: false,
-            msg: "가입 중 오류 발생"
-        });
+        res.json({ result: false, msg: "가입 중 오류 발생" });
     }
 });
+
 
 // 아이디 중복 확인
 router.get("/check/:userId", async (req, res) => {

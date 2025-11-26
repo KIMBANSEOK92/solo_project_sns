@@ -8,6 +8,8 @@ import Register from './components/Register';
 import MyPage from './components/MyPage';
 import Menu from './components/Menu'; // Menu로 변경
 import Mui from './components/Mui';
+import ChildAbuseReports from './components/ChildAbuseReports';
+import Friends from './components/Friends';
 
 function App() {
   const location = useLocation();
@@ -25,6 +27,8 @@ function App() {
           <Route path="/register" element={<Register />} />
           <Route path="/mypage" element={<MyPage />} />
           <Route path="/mui" element={<Mui />} />
+          <Route path="/childAbuseReports" element={<ChildAbuseReports />} />
+          <Route path="/friends" element={<Friends />} />
         </Routes>
       </Box>
     </Box>
