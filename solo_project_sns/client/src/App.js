@@ -7,7 +7,7 @@ import Feed from './components/Feed';
 import Register from './components/Register';
 import MyPage from './components/MyPage';
 import Menu from './components/Menu'; // Menu로 변경
-import Donations from './components/Donations ';
+import Donations from './components/Donations';
 import ChildAbuseReports from './components/ChildAbuseReports';
 import Friends from './components/Friends';
 
@@ -26,7 +26,7 @@ function App() {
           <Route path="/feed" element={<Feed />} />
           <Route path="/register" element={<Register />} />
           <Route path="/mypage" element={<MyPage />} />
-          <Route path="/donations " element={<Donations />} />
+          <Route path="/donations" element={<Donations />} />
           <Route path="/childAbuseReports" element={<ChildAbuseReports />} />
           <Route path="/friends" element={<Friends />} />
         </Routes>

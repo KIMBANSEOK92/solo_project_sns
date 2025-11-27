@@ -33,6 +33,14 @@ import { useNavigate } from 'react-router-dom';
 
 const USER_PROFILE_SRC = '/mr_kim_profile.jpg';
 
+const token = localStorage.getItem("token");
+const decode = token ? jwtDecode(token) : {};
+
+const userName = decode?.userName || "사용자";
+const profileImage = decode?.profileImage
+  ? `http://localhost:3010${decode.profileImage}`
+  : "/default_profile.jpg";
+
 
 // ------------------------------------
 // 게시물 카드 컴포넌트 (외부 컴포넌트로 분리)
@@ -40,8 +48,8 @@ const USER_PROFILE_SRC = '/mr_kim_profile.jpg';
 const FeedCard = memo(({ feed, onFeedClick }) => (
   <Card sx={{ marginBottom: 2, borderRadius: '8px', boxShadow: '0 1px 2px rgba(0, 0, 0, 0.2)' }}>
     <Box sx={{ display: 'flex', alignItems: 'center', p: 1.5 }}>
-      <Avatar src={USER_PROFILE_SRC} alt="profile" sx={{ width: 32, height: 32, mr: 1 }} />
-      <Typography variant="body1" sx={{ fontWeight: 'bold' }}>Mr. KIM</Typography>
+      <Avatar src={profileImage} alt="profile" sx={{ width: 32, height: 32, mr: 1 }} />
+      <Typography variant="body1" sx={{ fontWeight: 'bold' }}>{decode.userName}</Typography>
     </Box>
 
     {feed.image_url && (
@@ -383,7 +391,7 @@ function Feed() {
             <IconButton color="primary"><NotificationsNoneIcon /></IconButton>
           </Box>
 
-          <Avatar src={USER_PROFILE_SRC} sx={{ width: 40, height: 40 }} />
+          <Avatar src={profileImage} sx={{ width: 40, height: 40 }} />
         </Toolbar>
       </AppBar>
 
@@ -391,7 +399,7 @@ function Feed() {
         <Container maxWidth="sm">
           <Card sx={{ marginBottom: 4, padding: 1.5 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', pb: 1 }}>
-              <Avatar src={USER_PROFILE_SRC} sx={{ width: 40, height: 40, mr: 1.5 }} />
+              <Avatar src={profileImage} sx={{ width: 40, height: 40, mr: 1.5 }} />
               <Button
                 fullWidth
                 variant="outlined"

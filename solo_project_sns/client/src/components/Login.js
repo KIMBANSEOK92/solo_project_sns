@@ -124,7 +124,7 @@ function Login() {
           >
             <TextField
               inputRef={idRef}
-              label="이메일 또는 전화번호"
+              label="아이디"
               variant="outlined"
               margin="normal"
               fullWidth
