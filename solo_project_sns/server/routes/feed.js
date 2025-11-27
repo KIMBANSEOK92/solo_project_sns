@@ -1,11 +1,11 @@
 const express = require('express');
 const router = express.Router();
-const db = require("../db"); // db.query 사용
+const db = require("../db");
 const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
 
-// uploads 폴더 확인
+// uploads 폴더
 const uploadDir = path.join(__dirname, "../uploads");
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
 
@@ -17,7 +17,7 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 // ----------------------------------------
-// 1. 피드 등록 (이미지 선택 가능)
+// 1. 피드 등록
 // ----------------------------------------
 router.post("/", upload.single('file'), async (req, res) => {
     try {
@@ -28,37 +28,34 @@ router.post("/", upload.single('file'), async (req, res) => {
             imageUrl = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
         }
 
-        const sql = `
-            INSERT INTO feed (post_id, user_id, content, image_url, created_at, updated_at)
-            VALUES (UUID(), ?, ?, ?, NOW(), NOW())
-        `;
-        await db.query(sql, [userId, content, imageUrl]);
+        await db.query(
+            `INSERT INTO feed (post_id, user_id, content, image_url, created_at, updated_at)
+             VALUES (UUID(), ?, ?, ?, NOW(), NOW())`,
+            [userId, content, imageUrl]
+        );
 
-        // 추가 후 바로 DB에서 마지막 추가 피드 가져오기
         const [rows] = await db.query(
-            "SELECT post_id, user_id, content, image_url, created_at, updated_at FROM feed WHERE user_id = ? ORDER BY created_at DESC LIMIT 1",
+            "SELECT * FROM feed WHERE user_id = ? ORDER BY created_at DESC LIMIT 1",
             [userId]
         );
 
         res.json({ result: true, feed: rows[0], msg: "피드 등록 완료" });
-    } catch (error) {
-        console.error(error);
+    } catch (err) {
+        console.error(err);
         res.status(500).json({ result: false, msg: "피드 등록 실패" });
     }
 });
 
 // ----------------------------------------
-// 2. 특정 사용자 피드 조회
+// 2. 전체 피드 조회
 // ----------------------------------------
 router.get("/", async (req, res) => {
-    const { userId } = req.params;
     try {
-        const sql = `
+        const [list] = await db.query(`
             SELECT post_id, user_id, content, image_url, created_at, updated_at
             FROM feed
             ORDER BY created_at DESC
-        `;
-        const [list] = await db.query(sql);
+        `);
         res.json({ list, result: true });
     } catch (err) {
         console.error(err);
@@ -71,24 +68,117 @@ router.get("/", async (req, res) => {
 // ----------------------------------------
 router.delete("/:postId", async (req, res) => {
     const { postId } = req.params;
+
     try {
-        // 이미지 파일 삭제
         const [rows] = await db.query("SELECT image_url FROM feed WHERE post_id = ?", [postId]);
+
         if (rows.length > 0 && rows[0].image_url) {
             const filePath = path.join(uploadDir, path.basename(rows[0].image_url));
             if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
         }
 
-        // 피드 삭제
-        const [result] = await db.query("DELETE FROM feed WHERE post_id = ?", [postId]);
-        if (result.affectedRows === 1) {
-            res.json({ result: true, msg: "삭제되었습니다!" });
-        } else {
-            res.status(404).json({ result: false, msg: "해당 피드가 존재하지 않습니다." });
-        }
+        await db.query("DELETE FROM feed WHERE post_id = ?", [postId]);
+
+        res.json({ result: true, msg: "삭제되었습니다!" });
     } catch (err) {
         console.error(err);
         res.status(500).json({ result: false, msg: "삭제 중 오류 발생" });
+    }
+});
+
+// ----------------------------------------
+// ❤️ 좋아요 기능
+// ----------------------------------------
+router.post("/likes", async (req, res) => {
+    const { post_id, user_id } = req.body;
+
+    try {
+        const [exists] = await db.query(
+            "SELECT like_id FROM feed_likes WHERE post_id = ? AND user_id = ?",
+            [post_id, user_id]
+        );
+
+        if (exists.length > 0) {
+            res.json({ result: false, msg: "이미 좋아요를 눌렀습니다." });
+            return;
+        }
+
+        await db.query(
+            "INSERT INTO feed_likes (like_id, post_id, user_id, created_at) VALUES (UUID(), ?, ?, NOW())",
+            [post_id, user_id]
+        );
+
+        res.json({ result: true, msg: "좋아요 완료!" });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ result: false });
+    }
+});
+
+// 좋아요 개수 조회
+router.get("/likes/:postId", async (req, res) => {
+    const { postId } = req.params;
+
+    try {
+        const [rows] = await db.query(
+            "SELECT COUNT(*) AS count FROM feed_likes WHERE post_id = ?",
+            [postId]
+        );
+        res.json({ count: rows[0].count });
+    } catch (err) {
+        console.error(err);
+        res.json({ count: 0 });
+    }
+});
+
+// ----------------------------------------
+// 💬 댓글 기능
+// ----------------------------------------
+router.post("/comments", async (req, res) => {
+    const { post_id, user_id, comment } = req.body;
+
+    try {
+        await db.query(
+            "INSERT INTO feed_comments (comment_id, post_id, user_id, comment, created_at) VALUES (UUID(), ?, ?, ?, NOW())",
+            [post_id, user_id, comment]
+        );
+
+        res.json({ result: true });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ result: false });
+    }
+});
+
+// 댓글 조회
+router.get("/comments/:postId", async (req, res) => {
+    const { postId } = req.params;
+
+    try {
+        const [rows] = await db.query(
+            "SELECT * FROM feed_comments WHERE post_id = ? ORDER BY created_at ASC",
+            [postId]
+        );
+        res.json({ list: rows });
+    } catch (err) {
+        console.error(err);
+        res.json({ list: [] });
+    }
+});
+
+// ----------------------------------------
+// 🔗 공유 기능 (조회수 증가)
+// ----------------------------------------
+router.get("/share/:postId", async (req, res) => {
+    try {
+        await db.query(
+            "UPDATE feed SET view_count = IFNULL(view_count, 0) + 1 WHERE post_id = ?",
+            [req.params.postId]
+        );
+        res.json({ result: true, msg: "공유 완료!" });
+    } catch (err) {
+        console.error(err);
+        res.json({ result: false, msg: "공유 실패" });
     }
 });
 
