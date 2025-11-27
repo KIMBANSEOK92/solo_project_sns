@@ -13,7 +13,7 @@ app.use(express.json());
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 // router 영역
 
-app.use("/user", userRouter);
+app.use("/users", userRouter);
 app.use("/feed", feedRouter);
 
 

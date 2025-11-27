@@ -37,7 +37,7 @@ function Join() {
     formData.append("userId", userId);
 
     try {
-      const res = await fetch("http://localhost:3010/user/upload", {
+      const res = await fetch("http://localhost:3010/users/upload", {
         method: "POST",
         body: formData
       });
@@ -56,7 +56,7 @@ function Join() {
     if (!id) return alert("아이디를 입력하세요.");
 
     try {
-      const res = await fetch(`http://localhost:3010/user/check/${id}`);
+      const res = await fetch(`http://localhost:3010/users/check/${id}`);
       const data = await res.json();
       if (data.available) {
         setIdChecked(true);
@@ -94,7 +94,7 @@ function Join() {
     }
 
     try {
-      const res = await fetch("http://localhost:3010/user/join", {
+      const res = await fetch("http://localhost:3010/users/join", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(param)

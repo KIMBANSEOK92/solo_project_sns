@@ -15,7 +15,7 @@ function MyPage() {
       const decoded = jwtDecode(token);
       console.log("decoded ==> ", decoded);
 
-      fetch("http://localhost:3010/user/" + decoded.userId)
+      fetch("http://localhost:3010/users/" + decoded.userId)
         .then(res => res.json())
         .then(data => {
           console.log(data);

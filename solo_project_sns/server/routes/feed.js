@@ -64,19 +64,44 @@ router.get("/", async (req, res) => {
 });
 
 // ----------------------------------------
-// 3. 피드 삭제
+// 3. 피드 삭제 (작성자만 가능)
 // ----------------------------------------
 router.delete("/:postId", async (req, res) => {
     const { postId } = req.params;
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if (!token) {
+        return res.status(401).json({ result: false, msg: "로그인이 필요합니다." });
+    }
 
     try {
-        const [rows] = await db.query("SELECT image_url FROM feed WHERE post_id = ?", [postId]);
+        const jwt = require('jsonwebtoken');
+        const decoded = jwt.verify(token, 'server_secret_key');
+        const userId = decoded.userId;
 
-        if (rows.length > 0 && rows[0].image_url) {
-            const filePath = path.join(uploadDir, path.basename(rows[0].image_url));
+        // 게시물 작성자 확인
+        const [feedRows] = await db.query("SELECT user_id, image_url FROM feed WHERE post_id = ?", [postId]);
+
+        if (feedRows.length === 0) {
+            return res.status(404).json({ result: false, msg: "게시물을 찾을 수 없습니다." });
+        }
+
+        if (feedRows[0].user_id !== userId) {
+            return res.status(403).json({ result: false, msg: "본인이 작성한 게시물만 삭제할 수 있습니다." });
+        }
+
+        // 이미지 파일 삭제
+        if (feedRows[0].image_url) {
+            const filePath = path.join(uploadDir, path.basename(feedRows[0].image_url));
             if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
         }
 
+        // 관련 좋아요, 댓글도 삭제
+        await db.query("DELETE FROM feed_likes WHERE post_id = ?", [postId]);
+        await db.query("DELETE FROM feed_comments WHERE post_id = ?", [postId]);
+
+        // 게시물 삭제
         await db.query("DELETE FROM feed WHERE post_id = ?", [postId]);
 
         res.json({ result: true, msg: "삭제되었습니다!" });
@@ -87,7 +112,7 @@ router.delete("/:postId", async (req, res) => {
 });
 
 // ----------------------------------------
-// ❤️ 좋아요 기능
+// ❤️ 좋아요 기능 (토글)
 // ----------------------------------------
 router.post("/likes", async (req, res) => {
     const { post_id, user_id } = req.body;
@@ -99,35 +124,59 @@ router.post("/likes", async (req, res) => {
         );
 
         if (exists.length > 0) {
-            res.json({ result: false, msg: "이미 좋아요를 눌렀습니다." });
-            return;
+            // 이미 좋아요를 눌렀으면 취소
+            await db.query(
+                "DELETE FROM feed_likes WHERE post_id = ? AND user_id = ?",
+                [post_id, user_id]
+            );
+            res.json({ result: true, msg: "좋아요 취소", isLiked: false });
+        } else {
+            // 좋아요 추가
+            await db.query(
+                "INSERT INTO feed_likes (like_id, post_id, user_id, created_at) VALUES (UUID(), ?, ?, NOW())",
+                [post_id, user_id]
+            );
+            res.json({ result: true, msg: "좋아요 완료!", isLiked: true });
         }
-
-        await db.query(
-            "INSERT INTO feed_likes (like_id, post_id, user_id, created_at) VALUES (UUID(), ?, ?, NOW())",
-            [post_id, user_id]
-        );
-
-        res.json({ result: true, msg: "좋아요 완료!" });
     } catch (err) {
         console.error(err);
         res.status(500).json({ result: false });
     }
 });
 
-// 좋아요 개수 조회
+// 좋아요 개수 및 사용자 좋아요 여부 조회
 router.get("/likes/:postId", async (req, res) => {
     const { postId } = req.params;
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
 
     try {
         const [rows] = await db.query(
             "SELECT COUNT(*) AS count FROM feed_likes WHERE post_id = ?",
             [postId]
         );
-        res.json({ count: rows[0].count });
+
+        let isLiked = false;
+        if (token) {
+            try {
+                const jwt = require('jsonwebtoken');
+                const decoded = jwt.verify(token, 'server_secret_key');
+                const userId = decoded.userId;
+
+                const [likeRows] = await db.query(
+                    "SELECT like_id FROM feed_likes WHERE post_id = ? AND user_id = ?",
+                    [postId, userId]
+                );
+                isLiked = likeRows.length > 0;
+            } catch (err) {
+                // 토큰이 없거나 유효하지 않으면 isLiked는 false
+            }
+        }
+
+        res.json({ count: rows[0].count, isLiked });
     } catch (err) {
         console.error(err);
-        res.json({ count: 0 });
+        res.json({ count: 0, isLiked: false });
     }
 });
 
@@ -167,10 +216,20 @@ router.get("/comments/:postId", async (req, res) => {
 });
 
 // ----------------------------------------
-// 🔗 공유 기능 (조회수 증가)
+// 🔗 공유 기능 (조회수 증가) - 로그인 유저만
 // ----------------------------------------
 router.get("/share/:postId", async (req, res) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if (!token) {
+        return res.status(401).json({ result: false, msg: "로그인이 필요합니다." });
+    }
+
     try {
+        const jwt = require('jsonwebtoken');
+        jwt.verify(token, 'server_secret_key'); // 토큰 검증만 수행
+
         await db.query(
             "UPDATE feed SET view_count = IFNULL(view_count, 0) + 1 WHERE post_id = ?",
             [req.params.postId]

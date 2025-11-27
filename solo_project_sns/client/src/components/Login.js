@@ -17,7 +17,7 @@ function Login() {
       pwd: pwdRef.current.value
     };
 
-    fetch("http://localhost:3010/user/login", {
+    fetch("http://localhost:3010/users/login", {
       method: "POST",
       headers: {
         "Content-type": "application/json"

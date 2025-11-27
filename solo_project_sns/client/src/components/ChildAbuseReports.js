@@ -1,236 +1,230 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, memo } from 'react';
 import {
-    Grid2,
-    AppBar,
-    Toolbar,
-    Typography,
-    Container,
-    Box,
-    Card,
-    CardMedia,
-    CardContent,
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    IconButton,
-    DialogActions,
-    Button,
-    TextField,
-    List,
-    ListItem,
-    ListItemText,
-    ListItemAvatar,
-    Avatar,
-    Modal,
-
+  AppBar,
+  Toolbar,
+  Typography,
+  Container,
+  Box,
+  Card,
+  CardMedia,
+  CardContent,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  IconButton,
+  DialogActions,
+  Button,
+  List,
+  ListItem,
+  ListItemText,
+  Avatar,
+  Grid2,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
+import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline';
+import HomeIcon from '@mui/icons-material/Home';
+import NotificationsNoneIcon from '@mui/icons-material/NotificationsNone';
+import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
+
 import { jwtDecode } from "jwt-decode";
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from "react-router-dom";
 
-const style = {
-    position: 'absolute',
-    top: '50%',
-    left: '50%',
-    transform: 'translate(-50%, -50%)',
-    width: 400,
-    bgcolor: 'background.paper',
-    border: '2px solid #000',
-    boxShadow: 24,
-    p: 4,
-};
+const USER_PROFILE_SRC = "/mr_kim_profile.jpg";
 
-function Feed() {
-    const [open, setOpen] = useState(false);
-    const [selectedFeed, setSelectedFeed] = useState(null);
-    const [comments, setComments] = useState([]);
-    const [newComment, setNewComment] = useState('');
-    const [feeds, setFeeds] = useState([]);
-    const navigate = useNavigate();
+/* --------------------------------------------------
+    카드 UI (FeedCard 디자인 그대로 재사용)
+---------------------------------------------------- */
+const ChildCard = memo(({ child, onClick }) => (
+  <Card sx={{ marginBottom: 2, borderRadius: "8px", boxShadow: "0 1px 2px rgba(0,0,0,0.2)" }}>
+    <Box sx={{ display: "flex", alignItems: "center", p: 1.5 }}>
+      <Avatar src={USER_PROFILE_SRC} sx={{ width: 32, height: 32, mr: 1 }} />
+      <Typography variant="body1" sx={{ fontWeight: "bold" }}>
+        실종 아동 정보
+      </Typography>
+    </Box>
 
+    {child.image_url && (
+      <CardMedia
+        component="img"
+        height="auto"
+        image={child.image_url}
+        onClick={() => onClick(child)}
+        style={{ cursor: "pointer", maxHeight: "500px", objectFit: "cover" }}
+      />
+    )}
 
-    const handleOpen = () => setOpen(true);
+    <CardContent>
+      <Typography variant="h6" sx={{ fontWeight: "bold" }}>
+        {child.name}
+      </Typography>
+      <Typography variant="body2" color="textSecondary">
+        실종일: {child.missing_date}
+      </Typography>
+      <Typography variant="body2" color="textSecondary">
+        나이: {child.age}
+      </Typography>
+    </CardContent>
 
-    const fnFeeds = () => {
-        const token = localStorage.getItem("token");
-        if (!token) {
-            alert("로그인 후 이용해주세요.");
-            navigate("/");
-            return;
-        }
-        const decoded = jwtDecode(token);
-        fetch(`http://localhost:3010/feed/${decoded.userId}`)
-            .then(res => res.json())
-            .then(data => {
-                setFeeds(data.list);
-                console.log(data);
-            })
-            .catch(err => console.error(err));
-    };
+    <Box
+      sx={{ display: "flex", justifyContent: "space-around", borderTop: "1px solid #ddd", p: 1 }}
+    >
+      <Button sx={{ color: "#606770" }} startIcon={<VisibilityOutlinedIcon />} onClick={() => onClick(child)}>
+        상세보기
+      </Button>
 
-    useEffect(() => {
-        fnFeeds();
-    }, []);
+      <Button sx={{ color: "#606770" }} startIcon={<ChatBubbleOutlineIcon />} onClick={() => onClick(child)}>
+        제보하기
+      </Button>
+    </Box>
+  </Card>
+));
 
-    const handleClickOpen = (feed) => {
-        setSelectedFeed(feed);
-        setOpen(true);
-        setComments([
-            { id: 'user1', text: '멋진 사진이에요!' },
-            { id: 'user2', text: '이 장소에 가보고 싶네요!' },
-            { id: 'user3', text: '아름다운 풍경이네요!' },
-        ]);
-        setNewComment('');
-    };
+/* --------------------------------------------------
+      메인 페이지
+---------------------------------------------------- */
+function SearchChild() {
+  const [children, setChildren] = useState([]);
+  const [selectedChild, setSelectedChild] = useState(null);
 
-    const handleClose = () => {
-        setOpen(false);
-        setSelectedFeed(null);
-        setComments([]);
-    };
+  const [open, setOpen] = useState(false);
+  const navigate = useNavigate();
 
-    const handleAddComment = () => {
-        if (newComment.trim()) {
-            setComments([...comments, { id: 'currentUser', text: newComment }]);
-            setNewComment('');
-        }
-    };
+  /* ---------------------------------------------
+        실종 아동 목록 조회
+  --------------------------------------------- */
+  const loadChildList = useCallback(() => {
+    fetch("http://localhost:3010/child/find")
+      .then((res) => res.json())
+      .then((data) => setChildren(data.list || []))
+      .catch((err) => console.error(err));
+  }, []);
 
-    const handleDelete = (postId) => {
-        fetch(`http://localhost:3010/feed/${postId}`, {
-            method: "DELETE",
-            headers: { "Authorization": "Bearer " + localStorage.getItem("token") }
-        })
-            .then(res => res.json())
-            .then(data => {
-                alert(data.msg || "삭제되었습니다!");
-                setOpen(false);
-                fnFeeds();
-            })
-            .catch(err => console.error(err));
-    };
+  useEffect(() => {
+    loadChildList();
+  }, []);
 
-    return (
-        <Container maxWidth="md">
-            <AppBar position="static">
-                <Toolbar>
-                    <Typography variant="h6">SNS</Typography>
-                </Toolbar>
-            </AppBar>
+  /* ---------------------------------------------
+        상세 모달 열기
+  --------------------------------------------- */
+  const handleOpenModal = (child) => {
+    setSelectedChild(child);
+    setOpen(true);
+  };
 
-            <Box mt={4}>
-                <Grid2 container spacing={3}>
-                    {feeds.length > 0 ? feeds.map(feed => (
-                        <Grid2 xs={12} sm={6} md={4} key={feed.post_id}>
-                            <Card>
-                                {feed.image_url && (
-                                    <CardMedia
-                                        component="img"
-                                        height="200"
-                                        image={feed.image_url}
-                                        alt="feed image"
-                                        onClick={() => handleClickOpen(feed)}
-                                        style={{ cursor: 'pointer' }}
-                                    />
-                                )}
-                                <CardContent>
-                                    <Typography variant="body2" color="textSecondary">
-                                        {feed.content}
-                                    </Typography>
-                                </CardContent>
-                            </Card>
-                        </Grid2>
-                    )) : "등록된 피드가 없습니다. 피드를 등록해보세요!"}
+  const handleCloseModal = () => {
+    setOpen(false);
+    setSelectedChild(null);
+  };
+
+  return (
+    <Box sx={{ flexGrow: 1, backgroundColor: "#f0f2f5", minHeight: "100vh", display: "flex" }}>
+      {/* ---------------------------------------------
+          상단바
+      --------------------------------------------- */}
+      <AppBar position="fixed" sx={{ zIndex: 1300, backgroundColor: "white" }}>
+        <Toolbar sx={{ display: "flex", justifyContent: "space-between" }}>
+          <Box sx={{ display: "flex", alignItems: "center" }}>
+            <Avatar src="cp_logo.png" sx={{ width: 40, height: 40, mr: 1 }} />
+            <Typography variant="h6" sx={{ color: "#1877f2", fontWeight: "bold" }}>
+              CP (Child Protection)
+            </Typography>
+          </Box>
+
+          <Box>
+            <IconButton color="primary"><ChatBubbleOutlineIcon /></IconButton>
+            <IconButton color="primary"><HomeIcon /></IconButton>
+            <IconButton color="primary"><NotificationsNoneIcon /></IconButton>
+          </Box>
+
+          <Avatar src={USER_PROFILE_SRC} sx={{ width: 40, height: 40 }} />
+        </Toolbar>
+      </AppBar>
+
+      {/* ---------------------------------------------
+          콘텐츠 영역 (Feed 스타일 그대로 적용)
+      --------------------------------------------- */}
+      <Box
+        component="main"
+        sx={{
+          marginTop: "64px",
+          marginLeft: "240px",
+          width: "calc(100% - 240px)",
+          display: "flex",
+          justifyContent: "center",
+          pt: 4,
+        }}
+      >
+        <Container maxWidth="sm">
+          {children.length > 0 ? (
+            <Grid2 container spacing={3}>
+              {children.map((child) => (
+                <Grid2 item xs={12} key={child.child_id}>
+                  <ChildCard child={child} onClick={handleOpenModal} />
                 </Grid2>
+              ))}
+            </Grid2>
+          ) : (
+            <Box sx={{ textAlign: "center", mt: 5 }}>
+              <Typography>등록된 실종 아동 정보가 없습니다.</Typography>
             </Box>
-
-            <Dialog open={open} onClose={handleClose} fullWidth maxWidth="lg">
-                <DialogTitle>
-                    {selectedFeed?.content}
-                    <IconButton
-                        edge="end"
-                        color="inherit"
-                        onClick={handleClose}
-                        aria-label="close"
-                        sx={{ position: 'absolute', right: 8, top: 8 }}
-                    >
-                        <CloseIcon />
-                    </IconButton>
-                </DialogTitle>
-                <DialogContent sx={{ display: 'flex' }}>
-                    <Box sx={{ flex: 1 }}>
-                        <Typography variant="body1">{selectedFeed?.content}</Typography>
-                        {selectedFeed?.image_url && (
-                            <img
-                                src={selectedFeed.image_url}
-                                alt="feed image"
-                                style={{ width: '100%', marginTop: '10px' }}
-                            />
-                        )}
-                    </Box>
-
-                    <Box sx={{ width: '300px', marginLeft: '20px' }}>
-                        <Typography variant="h6">댓글</Typography>
-                        <List>
-                            {comments.map((comment, index) => (
-                                <ListItem key={index}>
-                                    <ListItemAvatar>
-                                        <Avatar>{comment.id.charAt(0).toUpperCase()}</Avatar>
-                                    </ListItemAvatar>
-                                    <ListItemText primary={comment.text} secondary={comment.id} />
-                                </ListItem>
-                            ))}
-                        </List>
-                        <TextField
-                            label="댓글을 입력하세요"
-                            variant="outlined"
-                            fullWidth
-                            value={newComment}
-                            onChange={(e) => setNewComment(e.target.value)}
-                        />
-                        <Button
-                            variant="contained"
-                            color="primary"
-                            onClick={handleAddComment}
-                            sx={{ marginTop: 1 }}
-                        >
-                            댓글 추가
-                        </Button>
-                    </Box>
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => handleDelete(selectedFeed.post_id)} variant='contained' color="primary">
-                        삭제
-                    </Button>
-                    <Button onClick={handleClose} color="primary">
-                        닫기
-                    </Button>
-                </DialogActions>
-            </Dialog>
-
-            <div>
-                <Button onClick={handleOpen}>Open modal</Button>
-                <Modal
-                    open={open}
-                    onClose={handleClose}
-                    aria-labelledby="modal-modal-title"
-                    aria-describedby="modal-modal-description"
-                >
-                    <Box sx={style}>
-                        <Typography id="modal-modal-title" variant="h6" component="h2">
-                            Text in a modal
-                        </Typography>
-                        <Typography id="modal-modal-description" sx={{ mt: 2 }}>
-                            Duis mollis, est non commodo luctus, nisi erat porttitor ligula.
-                        </Typography>
-                    </Box>
-
-
-                </Modal>
-            </div>
-
+          )}
         </Container>
-    );
+      </Box>
+
+      {/* ---------------------------------------------
+            상세 모달
+      --------------------------------------------- */}
+      <Dialog open={open} onClose={handleCloseModal} fullWidth maxWidth="lg">
+        <DialogTitle>
+          {selectedChild?.name}
+          <IconButton sx={{ position: "absolute", right: 8, top: 8 }} onClick={handleCloseModal}>
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+
+        <DialogContent sx={{ display: "flex" }}>
+          {/* 왼쪽: 이미지 및 정보 */}
+          <Box sx={{ flex: 1 }}>
+            {selectedChild?.image_url && (
+              <img
+                src={selectedChild.image_url}
+                alt="child"
+                style={{ width: "100%", borderRadius: "6px" }}
+              />
+            )}
+
+            <Typography variant="h6" sx={{ mt: 2 }}>
+              기본 정보
+            </Typography>
+            <Typography>이름: {selectedChild?.name}</Typography>
+            <Typography>나이: {selectedChild?.age}</Typography>
+            <Typography>성별: {selectedChild?.gender}</Typography>
+            <Typography>실종일: {selectedChild?.missing_date}</Typography>
+            <Typography>실종 장소: {selectedChild?.missing_location}</Typography>
+
+            <Button sx={{ mt: 3 }} variant="contained" color="primary">
+              제보하기
+            </Button>
+          </Box>
+
+          {/* 오른쪽: 제보 기록 */}
+          <Box sx={{ width: "300px", ml: 3 }}>
+            <Typography variant="h6">제보 기록</Typography>
+
+            <List>
+              <ListItem>
+                <ListItemText primary="최근 제보 기능 준비중" />
+              </ListItem>
+            </List>
+          </Box>
+        </DialogContent>
+
+        <DialogActions>
+          <Button onClick={handleCloseModal}>닫기</Button>
+        </DialogActions>
+      </Dialog>
+    </Box>
+  );
 }
 
-export default Feed;
+export default SearchChild;

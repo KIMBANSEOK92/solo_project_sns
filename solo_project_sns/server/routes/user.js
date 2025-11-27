@@ -13,8 +13,6 @@ const JWT_KEY = "server_secret_key";
 // Multer 설정
 // -----------------
 const uploadDir = path.join(__dirname, '..', 'uploads');
-
-// uploads 폴더 없으면 생성
 if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir);
 }
@@ -29,27 +27,67 @@ const storage = multer.diskStorage({
     }
 });
 
-const upload = multer({ storage: storage });
+const upload = multer({ storage });
 
-
-// 파일 업로드
-router.post('/upload', upload.array('file'), async (req, res) => {
+// -----------------
+// 파일 업로드 + DB profile_img 업데이트
+// -----------------
+router.post('/upload', upload.single("file"), async (req, res) => {
     try {
         const userId = req.body.userId;
-        const files = req.files;
+        const file = req.file;
 
-        console.log("업로드된 파일:", files);
-        console.log("사용자 ID:", userId);
+        if (!file) {
+            return res.json({ result: false, msg: "업로드된 파일이 없습니다." });
+        }
 
-        res.json({ result: "success", files: files.map(f => f.filename) });
+        const filePath = `/uploads/${file.filename}`;
+
+        // DB 업데이트
+        const sql = `
+            UPDATE Users
+            SET profile_img = ?
+            WHERE user_id = ?
+        `;
+        await db.query(sql, [filePath, userId]);
+
+        res.json({
+            result: true,
+            msg: "프로필 이미지가 저장되었습니다.",
+            filePath
+        });
+
     } catch (error) {
         console.error(error);
-        res.json({ result: "fail", msg: "파일 업로드 실패" });
+        res.json({ result: false, msg: "파일 업로드 처리 중 오류 발생" });
     }
 });
 
+// -----------------
+// 전체 사용자 조회
+// -----------------
+router.get("/", async (req, res) => {
+    try {
+        const sql = `
+            SELECT user_id, username, email, profile_img, region, created_at
+            FROM Users
+            ORDER BY created_at DESC
+        `;
+        const [list] = await db.query(sql);
 
-// 특정 사용자 조회
+        res.json({
+            list,
+            result: true
+        });
+    } catch (error) {
+        console.error(error);
+        res.json({ result: false, msg: "사용자 목록 조회 중 오류 발생" });
+    }
+});
+
+// -----------------
+// 단일 사용자 조회
+// -----------------
 router.get("/:userId", async (req, res) => {
     const { userId } = req.params;
     try {
@@ -64,6 +102,7 @@ router.get("/:userId", async (req, res) => {
             WHERE U.user_id = ?
         `;
         const [list] = await db.query(sql, [userId]);
+
         res.json({
             user: list[0],
             result: "success"
@@ -74,19 +113,26 @@ router.get("/:userId", async (req, res) => {
     }
 });
 
-
+// -----------------
 // 회원가입
+// -----------------
 router.post("/join", async (req, res) => {
     const { userId, pwd, userName, email, region } = req.body;
+
     try {
         const hashPwd = await bcrypt.hash(pwd, 10);
 
-        // 먼저 회원가입만 DB에 저장 (프로필 이미지는 나중에)
         const sql = `
             INSERT INTO Users (user_id, username, email, password, region, created_at)
             VALUES (?, ?, ?, ?, ?, NOW())
         `;
-        const [result] = await db.query(sql, [userId, userName, email, hashPwd, region]);
+        const [result] = await db.query(sql, [
+            userId,
+            userName,
+            email,
+            hashPwd,
+            region
+        ]);
 
         if (result.affectedRows === 1) {
             res.json({ result: true, msg: "가입되었습니다!" });
@@ -99,13 +145,16 @@ router.post("/join", async (req, res) => {
     }
 });
 
-
+// -----------------
 // 아이디 중복 확인
+// -----------------
 router.get("/check/:userId", async (req, res) => {
     const { userId } = req.params;
+
     try {
         const sql = "SELECT user_id FROM Users WHERE user_id = ?";
         const [list] = await db.query(sql, [userId]);
+
         if (list.length > 0) {
             res.json({ available: false });
         } else {
@@ -117,13 +166,12 @@ router.get("/check/:userId", async (req, res) => {
     }
 });
 
-
-
 // -----------------
 // 로그인
 // -----------------
 router.post("/login", async (req, res) => {
     const { userId, pwd } = req.body;
+
     try {
         const sql = "SELECT * FROM Users WHERE user_id = ?";
         const [list] = await db.query(sql, [userId]);
@@ -134,6 +182,7 @@ router.post("/login", async (req, res) => {
 
         if (list.length > 0) {
             const match = await bcrypt.compare(pwd, list[0].password);
+
             if (match) {
                 msg = list[0].username + "님 환영합니다!";
                 result = true;
@@ -141,18 +190,21 @@ router.post("/login", async (req, res) => {
                 const user = {
                     userId: list[0].user_id,
                     userName: list[0].username,
+                    profileImage: list[0].profile_img,
                     status: "A"
                 };
-                token = jwt.sign(user, JWT_KEY, { expiresIn: '1h' });
-                console.log("발급된 토큰:", token);
+
+                token = jwt.sign(user, JWT_KEY, { expiresIn: "1h" });
             } else {
                 msg = "비밀번호가 올바르지 않습니다.";
             }
+
         } else {
             msg = "아이디가 존재하지 않습니다.";
         }
 
         res.json({ result, msg, token });
+
     } catch (error) {
         console.error(error);
         res.json({ result: false, msg: "로그인 중 오류 발생" });

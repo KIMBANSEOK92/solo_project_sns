@@ -7,9 +7,10 @@ import {
   Favorite as SupportIcon
 } from '@mui/icons-material';
 import { Link } from 'react-router-dom';
+import { jwtDecode } from 'jwt-decode';
 
-// 컴포넌트가 userImageSrc와 userName을 props로 받도록 수정
-function Menu({ userImageSrc, userName }) {
+function Menu() {
+
   const menuItemStyle = {
     fontSize: '15px',
     fontWeight: 600,
@@ -21,9 +22,13 @@ function Menu({ userImageSrc, userName }) {
     color: '#1c1e21',
   };
 
-  // 기본값 설정: props가 전달되지 않았을 경우를 대비합니다.
-  const profileImage = userImageSrc || '/default_profile.jpg'; // 기본 이미지 경로 설정
-  const profileName = userName || '사용자 이름';
+  const token = localStorage.getItem("token");
+  const decode = token ? jwtDecode(token) : {};
+
+  const profileName = decode?.userName || "사용자";
+  const profileImage = decode?.profileImage
+    ? `http://localhost:3010${decode.profileImage}`
+    : "/default_profile.jpg";
 
   return (
     <Drawer
@@ -45,46 +50,38 @@ function Menu({ userImageSrc, userName }) {
       <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
         <Avatar
           alt={`${profileName} Profile`}
-          src={profileImage} // <--- Props에서 받은 이미지 URL 연결
+          src={profileImage}
           sx={{ width: 60, height: 60, mb: 1.5, border: '2px solid #ddd' }}
         />
         <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#1c1e21' }}>
-          {profileName} {/* <--- Props에서 받은 사용자 이름(ID) 연결 */}
+          {profileName}
         </Typography>
       </Box>
 
-      {/* --- 메뉴 리스트 --- */}
+      {/* 메뉴 리스트 */}
       <List sx={{ pt: 1 }}>
         <ListItem button component={Link} to="/feed">
-          <ListItemIcon sx={menuIconStyle}>
-            <HomeIcon />
-          </ListItemIcon>
+          <ListItemIcon sx={menuIconStyle}><HomeIcon /></ListItemIcon>
           <ListItemText primary="피드" primaryTypographyProps={{ style: menuItemStyle }} />
         </ListItem>
 
         <ListItem button component={Link} to="/childAbuseReports">
-          <ListItemIcon sx={menuIconStyle}>
-            <SearchIcon />
-          </ListItemIcon>
+          <ListItemIcon sx={menuIconStyle}><SearchIcon /></ListItemIcon>
           <ListItemText primary="아동 찾기" primaryTypographyProps={{ style: menuItemStyle }} />
         </ListItem>
 
         <ListItem button component={Link} to="/friends">
-          <ListItemIcon sx={menuIconStyle}>
-            <FriendsIcon />
-          </ListItemIcon>
+          <ListItemIcon sx={menuIconStyle}><FriendsIcon /></ListItemIcon>
           <ListItemText primary="친구" primaryTypographyProps={{ style: menuItemStyle }} />
         </ListItem>
 
         <ListItem button component={Link} to="/mui">
-          <ListItemIcon sx={menuIconStyle}>
-            <SupportIcon />
-          </ListItemIcon>
+          <ListItemIcon sx={menuIconStyle}><SupportIcon /></ListItemIcon>
           <ListItemText primary="후원" primaryTypographyProps={{ style: menuItemStyle }} />
         </ListItem>
       </List>
     </Drawer>
   );
-};
+}
 
 export default Menu;

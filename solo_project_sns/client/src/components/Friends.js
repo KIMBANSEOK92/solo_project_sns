@@ -14,27 +14,56 @@ import {
 import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline';
 import HomeIcon from '@mui/icons-material/Home';
 import NotificationsNoneIcon from '@mui/icons-material/NotificationsNone';
+import { jwtDecode } from 'jwt-decode';
+import { useNavigate } from 'react-router-dom';
 
 const USER_PROFILE_SRC = '/mr_kim_profile.jpg';
-// 임시로 현재 로그인된 사용자 ID를 설정합니다. (실제로는 로그인 API에서 받아와야 함)
-const CURRENT_USER_ID = 'test_user_001';
 
-function Feed() {
+function Friends() {
     // 서버에서 불러온 전체 사용자 목록을 저장할 상태
     const [users, setUsers] = useState([]);
+    const [currentUserId, setCurrentUserId] = useState(null);
+    const [friendStatuses, setFriendStatuses] = useState({}); // 각 유저의 친구 상태 저장
+    const navigate = useNavigate();
+
+    // 현재 로그인한 유저 정보 가져오기
+    useEffect(() => {
+        const token = localStorage.getItem("token");
+        if (!token) {
+            alert("로그인 후 이용해주세요.");
+            navigate("/");
+            return;
+        }
+        try {
+            const decoded = jwtDecode(token);
+            setCurrentUserId(decoded.userId);
+        } catch (err) {
+            console.error("토큰 디코딩 실패:", err);
+            navigate("/");
+        }
+    }, [navigate]);
 
     // ------------------------------------
     // 전체 유저 목록 조회 (서버: GET /users)
     // ------------------------------------
     const fnUsers = () => {
-        // 실제로는 인증 토큰을 포함해야 하지만, 여기서는 간결하게 생략합니다.
-        fetch("http://localhost:3010/users") // 서버 라우터 경로에 맞게 수정
+        const token = localStorage.getItem("token");
+        if (!token) {
+            return;
+        }
+
+        fetch("http://localhost:3010/users")
             .then(res => res.json())
             .then(data => {
                 if (data.result && data.list) {
                     // 현재 사용자 자신은 리스트에서 제외
-                    const filteredUsers = data.list.filter(user => user.user_id !== CURRENT_USER_ID);
+                    const filteredUsers = data.list.filter(user => user.user_id !== currentUserId);
                     setUsers(filteredUsers);
+                    
+                    // 각 유저의 친구 상태 확인
+                    if (currentUserId) {
+                        checkFriendStatuses(filteredUsers, currentUserId);
+                    }
                 } else {
                     console.error("유저 목록 조회 실패:", data.msg);
                 }
@@ -42,106 +71,189 @@ function Feed() {
             .catch(err => console.error("API 통신 오류:", err));
     };
 
+    // 각 유저의 친구 상태 확인
+    const checkFriendStatuses = async (userList, userId) => {
+        const token = localStorage.getItem("token");
+        const statuses = {};
+        
+        try {
+            const response = await fetch(`http://localhost:3010/friends/${userId}`, {
+                headers: {
+                    "Authorization": `Bearer ${token}`
+                }
+            });
+            const data = await response.json();
+            
+            if (data.result && data.list) {
+                // 친구 관계를 맵으로 변환
+                userList.forEach(user => {
+                    const friendRelation = data.list.find(
+                        f => f.friend_id === user.user_id
+                    );
+                    if (friendRelation) {
+                        statuses[user.user_id] = {
+                            status: friendRelation.status,
+                            relation_id: friendRelation.relation_id,
+                            isRequester: friendRelation.original_requester_id === userId
+                        };
+                    } else {
+                        statuses[user.user_id] = { status: 'none' };
+                    }
+                });
+            } else {
+                // 친구 관계가 없으면 모두 'none'으로 설정
+                userList.forEach(user => {
+                    statuses[user.user_id] = { status: 'none' };
+                });
+            }
+        } catch (err) {
+            console.error("친구 상태 확인 오류:", err);
+            // 오류 발생 시 모두 'none'으로 설정
+            userList.forEach(user => {
+                statuses[user.user_id] = { status: 'none' };
+            });
+        }
+        
+        setFriendStatuses(statuses);
+    };
+
     useEffect(() => {
-        fnUsers();
-    }, []);
+        if (currentUserId) {
+            fnUsers();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [currentUserId]);
 
     // ------------------------------------
     // 친구 추가/요청 기능 (서버: POST /friends)
     // ------------------------------------
     const handleAddFriend = (receiverId) => {
-        // 실제로는 JWT 토큰을 사용하여 요청자를 인증해야 합니다.
+        const token = localStorage.getItem("token");
+        if (!token || !currentUserId) {
+            alert("로그인 후 이용해주세요.");
+            return;
+        }
+
         fetch("http://localhost:3010/friends", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-                requester_id: CURRENT_USER_ID, // 임시 로그인 사용자
+                requester_id: currentUserId,
                 receiver_id: receiverId,
             })
         })
             .then(res => res.json())
             .then(data => {
                 alert(data.msg);
-                // 요청 후 목록을 다시 로드하여 상태 변화를 반영할 수 있습니다.
-                // fnUsers(); 
-            })
-            .catch(err => console.error("친구 요청 오류:", err));
-    };
-
-    // ------------------------------------
-    // 유저 삭제 기능 (서버: DELETE /users/:user_id)
-    // ------------------------------------
-    const handleDeleteUser = (userId) => {
-        if (!window.confirm(`${userId} 유저를 영구 삭제하시겠습니까? (테스트용)`)) {
-            return;
-        }
-
-        fetch(`http://localhost:3010/users/${userId}`, {
-            method: "DELETE",
-        })
-            .then(res => res.json())
-            .then(data => {
-                alert(data.msg);
                 if (data.result) {
-                    // 성공 시 리스트 업데이트
+                    // 요청 후 목록을 다시 로드하여 상태 변화를 반영
                     fnUsers();
                 }
             })
-            .catch(err => console.error("유저 삭제 오류:", err));
+            .catch(err => {
+                console.error("친구 요청 오류:", err);
+                alert("친구 요청 중 오류가 발생했습니다.");
+            });
     };
+
 
     // ------------------------------------
     // 유저 카드 컴포넌트
     // ------------------------------------
-    const UserCard = ({ user }) => (
-        <Card
-            sx={{
-                padding: 2,
-                textAlign: 'center',
-                borderRadius: '10px',
-                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-            }}
-        >
-            <Avatar
-                src={user.profile_img || USER_PROFILE_SRC}
+    const UserCard = ({ user }) => {
+        const friendStatus = friendStatuses[user.user_id] || { status: 'none' };
+        const getButtonText = () => {
+            switch (friendStatus.status) {
+                case 'accepted':
+                    return '친구';
+                case 'pending':
+                    return friendStatus.isRequester ? '요청됨' : '요청 수락';
+                default:
+                    return '친구 추가';
+            }
+        };
+
+        const getButtonVariant = () => {
+            switch (friendStatus.status) {
+                case 'accepted':
+                    return 'contained';
+                case 'pending':
+                    return friendStatus.isRequester ? 'outlined' : 'contained';
+                default:
+                    return 'outlined';
+            }
+        };
+
+        const getButtonColor = () => {
+            switch (friendStatus.status) {
+                case 'accepted':
+                    return 'success';
+                case 'pending':
+                    return friendStatus.isRequester ? 'default' : 'primary';
+                default:
+                    return 'primary';
+            }
+        };
+
+        const handleButtonClick = () => {
+            if (friendStatus.status === 'accepted') {
+                alert('이미 친구입니다.');
+            } else if (friendStatus.status === 'pending' && !friendStatus.isRequester) {
+                // 요청 수락 기능 (추후 구현 가능)
+                alert('친구 요청 수락 기능은 추후 구현 예정입니다.');
+            } else {
+                handleAddFriend(user.user_id);
+            }
+        };
+
+        return (
+            <Card
                 sx={{
-                    width: 70,
-                    height: 70,
-                    margin: '0 auto',
-                    mb: 1,
-                    bgcolor: '#1877f2', // 이미지가 없을 때 기본 배경색
+                    padding: 2,
+                    textAlign: 'center',
+                    borderRadius: '10px',
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
                 }}
             >
-                {/* 이미지가 없으면 이름의 첫 글자를 표시 */}
-                {user.username ? user.username[0].toUpperCase() : 'U'}
-            </Avatar>
-            <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
-                {user.username}
-            </Typography>
-            <Typography variant="body2" color="textSecondary" sx={{ mb: 1 }}>
-                {user.email}
-            </Typography>
+                <Avatar
+                    src={user.profile_img || USER_PROFILE_SRC}
+                    sx={{
+                        width: 70,
+                        height: 70,
+                        margin: '0 auto',
+                        mb: 1,
+                        bgcolor: '#1877f2',
+                    }}
+                >
+                    {user.username ? user.username[0].toUpperCase() : 'U'}
+                </Avatar>
 
-            {/* 친구 추가 버튼 */}
-            <Button
-                variant="outlined"
-                sx={{ width: '100%' }}
-                onClick={() => handleAddFriend(user.user_id)}
-            >
-                친구 요청
-            </Button>
+                
+                <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
+                    {user.username}
+                </Typography>
+                <Typography variant="body2" color="textSecondary" sx={{ mb: 1 }}>
+                    {user.email}
+                </Typography>
+                {user.region && (
+                    <Typography variant="caption" color="textSecondary" sx={{ mb: 1, display: 'block' }}>
+                        지역: {user.region}
+                    </Typography>
+                )}
 
-            {/* 유저 삭제 버튼 (관리/테스트용) */}
-            <Button
-                variant="text"
-                color="error"
-                sx={{ mt: 1, width: '100%', border: '1px solid #ccc' }}
-                onClick={() => handleDeleteUser(user.user_id)}
-            >
-                유저 삭제
-            </Button>
-        </Card>
-    );
+                {/* 친구 추가 버튼 */}
+                <Button
+                    variant={getButtonVariant()}
+                    color={getButtonColor()}
+                    sx={{ width: '100%' }}
+                    onClick={handleButtonClick}
+                    disabled={friendStatus.status === 'accepted' || (friendStatus.status === 'pending' && friendStatus.isRequester)}
+                >
+                    {getButtonText()}
+                </Button>
+            </Card>
+        );
+    };
 
     // ------------------------------------
     // 실제 화면 렌더링
@@ -191,7 +303,7 @@ function Feed() {
             >
                 <Container maxWidth="lg">
                     <Typography variant="h5" gutterBottom sx={{ mb: 3, fontWeight: 'bold' }}>
-                        👀 찾고 있는 친구
+                        알고 싶은 친구를 추가해보세요
                     </Typography>
 
                     {users.length > 0 ? (
@@ -218,4 +330,4 @@ function Feed() {
     );
 }
 
-export default Feed;
+export default Friends;
