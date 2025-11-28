@@ -11,6 +11,7 @@ import Donations from './components/Donations';
 import ChildAbuseReports from './components/ChildAbuseReports';
 import Friends from './components/Friends';
 
+
 function App() {
   const location = useLocation();
   const isAuthPage = location.pathname === '/' || location.pathname === '/join';

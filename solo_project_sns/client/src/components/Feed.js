@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, memo, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, memo } from 'react';
 import {
   AppBar,
   Toolbar,
@@ -21,6 +21,9 @@ import {
   ListItemAvatar,
   Avatar,
   Grid2,
+  Menu,
+  MenuItem,
+  Divider
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline';
@@ -33,23 +36,18 @@ import { useNavigate } from 'react-router-dom';
 
 const USER_PROFILE_SRC = '/mr_kim_profile.jpg';
 
-const token = localStorage.getItem("token");
-const decode = token ? jwtDecode(token) : {};
-
-const userName = decode?.userName || "사용자";
-const profileImage = decode?.profileImage
-  ? `http://localhost:3010${decode.profileImage}`
-  : "/default_profile.jpg";
-
-
 // ------------------------------------
-// 게시물 카드 컴포넌트 (외부 컴포넌트로 분리)
+// 게시물 카드 컴포넌트
 // ------------------------------------
 const FeedCard = memo(({ feed, onFeedClick }) => (
   <Card sx={{ marginBottom: 2, borderRadius: '8px', boxShadow: '0 1px 2px rgba(0, 0, 0, 0.2)' }}>
     <Box sx={{ display: 'flex', alignItems: 'center', p: 1.5 }}>
-      <Avatar src={profileImage} alt="profile" sx={{ width: 32, height: 32, mr: 1 }} />
-      <Typography variant="body1" sx={{ fontWeight: 'bold' }}>{decode.userName}</Typography>
+      <Avatar
+        src={feed.profile_img ? `http://localhost:3010${feed.profile_img}` : USER_PROFILE_SRC}
+        alt="profile"
+        sx={{ width: 32, height: 32, mr: 1 }}
+      />
+      <Typography variant="body1" sx={{ fontWeight: 'bold' }}>{feed.username}</Typography>
     </Box>
 
     {feed.image_url && (
@@ -96,7 +94,7 @@ const FeedCard = memo(({ feed, onFeedClick }) => (
 ));
 
 // ------------------------------------
-// 게시물 작성 모달 (외부 컴포넌트로 분리)
+// 게시물 작성 모달
 // ------------------------------------
 const PostingModal = memo(({ open, onClose, onPost, content, onContentChange, onFileChange }) => {
   return (
@@ -141,9 +139,9 @@ function Feed() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [currentUserId, setCurrentUserId] = useState(null);
 
+  const [anchorEl, setAnchorEl] = useState(null);
   const navigate = useNavigate();
 
-  // 현재 로그인한 유저 정보 가져오기
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (token) {
@@ -156,9 +154,7 @@ function Feed() {
     }
   }, []);
 
-  // ------------------------------------
   // 전체 피드 조회
-  // ------------------------------------
   const fnFeeds = () => {
     const token = localStorage.getItem("token");
     if (!token) {
@@ -177,9 +173,11 @@ function Feed() {
     fnFeeds();
   }, []);
 
-  // ------------------------------------
-  // 모달 열기 + 댓글 / 좋아요 불러오기
-  // ------------------------------------
+  const handleMenuOpen = (event) => setAnchorEl(event.currentTarget);
+  const handleMenuClose = () => setAnchorEl(null);
+  const handleProfileClick = () => { navigate('/MyPage'); handleMenuClose(); };
+  const handleLogout = () => { localStorage.removeItem("token"); navigate('/'); handleMenuClose(); };
+
   const handleClickOpen = useCallback((feed) => {
     setSelectedFeed(feed);
     setOpen(true);
@@ -193,35 +191,18 @@ function Feed() {
 
     // 좋아요 수 및 사용자 좋아요 여부 불러오기
     fetch(`http://localhost:3010/feed/likes/${feed.post_id}`, {
-      headers: {
-        "Authorization": `Bearer ${token}`
-      }
+      headers: { "Authorization": `Bearer ${token}` }
     })
       .then(res => res.json())
-      .then(data => {
-        setLikeCount(data.count);
-        setIsLiked(data.isLiked || false);
-      });
+      .then(data => { setLikeCount(data.count); setIsLiked(data.isLiked || false); });
   }, []);
 
-  const handleClose = () => {
-    setOpen(false);
-    setSelectedFeed(null);
-    setComments([]);
-  };
+  const handleClose = () => { setOpen(false); setSelectedFeed(null); setComments([]); };
 
-  // ------------------------------------
-  // 댓글 추가 (로그인 유저만)
-  // ------------------------------------
   const handleAddComment = () => {
     if (!newComment.trim()) return;
-
     const token = localStorage.getItem("token");
-    if (!token) {
-      alert("로그인 후 이용해주세요.");
-      return;
-    }
-
+    if (!token) { alert("로그인 후 이용해주세요."); return; }
     const decoded = jwtDecode(token);
 
     fetch("http://localhost:3010/feed/comments", {
@@ -235,163 +216,90 @@ function Feed() {
     })
       .then(() => {
         setNewComment("");
-
-        // 댓글 다시 불러오기
         fetch(`http://localhost:3010/feed/comments/${selectedFeed.post_id}`)
           .then(res => res.json())
           .then(data => setComments(data.list));
       })
-      .catch(err => {
-        console.error(err);
-        alert("댓글 추가 중 오류가 발생했습니다.");
-      });
+      .catch(err => { console.error(err); alert("댓글 추가 중 오류가 발생했습니다."); });
   };
 
-  // ------------------------------------
-  // 좋아요 기능 (토글)
-  // ------------------------------------
   const handleLike = () => {
     const token = localStorage.getItem("token");
-    if (!token) {
-      alert("로그인 후 이용해주세요.");
-      return;
-    }
-
+    if (!token) { alert("로그인 후 이용해주세요."); return; }
     const decoded = jwtDecode(token);
 
     fetch("http://localhost:3010/feed/likes", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        post_id: selectedFeed.post_id,
-        user_id: decoded.userId,
-      })
+      body: JSON.stringify({ post_id: selectedFeed.post_id, user_id: decoded.userId })
     })
       .then(res => res.json())
-      .then(data => {
-        // 좋아요 수 및 상태 다시 불러오기
+      .then(() => {
         fetch(`http://localhost:3010/feed/likes/${selectedFeed.post_id}`, {
-          headers: {
-            "Authorization": `Bearer ${token}`
-          }
+          headers: { "Authorization": `Bearer ${token}` }
         })
           .then(res => res.json())
-          .then(data => {
-            setLikeCount(data.count);
-            setIsLiked(data.isLiked || false);
-          });
+          .then(data => { setLikeCount(data.count); setIsLiked(data.isLiked || false); });
       });
   };
 
-  // ------------------------------------
-  // 공유(조회수 증가) - 로그인 유저만
-  // ------------------------------------
   const handleShare = () => {
     const token = localStorage.getItem("token");
-    if (!token) {
-      alert("로그인 후 이용해주세요.");
-      return;
-    }
+    if (!token) { alert("로그인 후 이용해주세요."); return; }
 
     fetch(`http://localhost:3010/feed/share/${selectedFeed.post_id}`, {
-      headers: {
-        "Authorization": `Bearer ${token}`
-      }
+      headers: { "Authorization": `Bearer ${token}` }
     })
       .then(res => res.json())
-      .then(data => {
-        if (data.result) {
-          alert(data.msg);
-        } else {
-          alert(data.msg || "공유 실패");
-        }
-      })
-      .catch(err => {
-        console.error(err);
-        alert("공유 중 오류가 발생했습니다.");
-      });
+      .then(data => alert(data.msg || "공유 완료"))
+      .catch(err => { console.error(err); alert("공유 중 오류가 발생했습니다."); });
   };
 
-  // ------------------------------------
-  // 피드 삭제
-  // ------------------------------------
   const handleDelete = (postId) => {
     fetch(`http://localhost:3010/feed/${postId}`, {
       method: "DELETE",
-      headers: {
-        "Authorization": "Bearer " + localStorage.getItem("token")
-      }
+      headers: { "Authorization": "Bearer " + localStorage.getItem("token") }
     })
       .then(res => res.json())
-      .then(data => {
-        alert(data.msg);
-        setOpen(false);
-        fnFeeds();
-      });
+      .then(data => { alert(data.msg); setOpen(false); fnFeeds(); });
   };
 
-
-  // ------------------------------------
-  // 게시물 작성 핸들러
-  // ------------------------------------
-  const handlePostFeed = useCallback(async () => {
+  const handlePostFeed = useCallback(() => {
     const token = localStorage.getItem("token");
     const decoded = jwtDecode(token);
-
     const formData = new FormData();
     formData.append("userId", decoded.userId);
     formData.append("content", newPostContent);
     if (selectedFile) formData.append("file", selectedFile);
 
-    fetch("http://localhost:3010/feed", {
-      method: "POST",
-      body: formData
-    })
+    fetch("http://localhost:3010/feed", { method: "POST", body: formData })
       .then(res => res.json())
-      .then(data => {
-        alert("피드 등록 완료!");
-        setIsPostingModalOpen(false);
-        setNewPostContent('');
-        setSelectedFile(null);
-        fnFeeds();
-      });
+      .then(() => { setIsPostingModalOpen(false); setNewPostContent(''); setSelectedFile(null); fnFeeds(); });
   }, [newPostContent, selectedFile]);
 
-  const handleClosePostingModal = useCallback(() => {
-    setIsPostingModalOpen(false);
-    setNewPostContent('');
-    setSelectedFile(null);
-  }, []);
+  const handleClosePostingModal = useCallback(() => { setIsPostingModalOpen(false); setNewPostContent(''); setSelectedFile(null); }, []);
+  const handleContentChange = useCallback((value) => setNewPostContent(value), []);
+  const handleFileChange = useCallback((file) => setSelectedFile(file), []);
 
-  const handleContentChange = useCallback((value) => {
-    setNewPostContent(value);
-  }, []);
-
-  const handleFileChange = useCallback((file) => {
-    setSelectedFile(file);
-  }, []);
-
-  // ------------------------------------
-  // 실제 화면 렌더링
-  // ------------------------------------
   return (
     <Box sx={{ flexGrow: 1, backgroundColor: '#f0f2f5', minHeight: '100vh', display: 'flex' }}>
       <AppBar position="fixed" sx={{ zIndex: 1300, backgroundColor: 'white' }}>
         <Toolbar sx={{ display: 'flex', justifyContent: 'space-between' }}>
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
             <Avatar src="cp_logo.png" alt="CP Logo" sx={{ width: 40, height: 40, mr: 1 }} />
-            <Typography variant="h6" sx={{ color: '#1877f2', fontWeight: 'bold' }}>
-              CP (Child Protection)
-            </Typography>
+            <Typography variant="h6" sx={{ color: '#1877f2', fontWeight: 'bold' }}>CP (Child Protection)</Typography>
           </Box>
-
           <Box>
             <IconButton color="primary"><ChatBubbleOutlineIcon /></IconButton>
             <IconButton color="primary"><HomeIcon /></IconButton>
             <IconButton color="primary"><NotificationsNoneIcon /></IconButton>
           </Box>
-
-          <Avatar src={profileImage} sx={{ width: 40, height: 40 }} />
+          <Avatar src={USER_PROFILE_SRC} sx={{ width: 40, height: 40 }} onClick={handleMenuOpen} />
+          <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleMenuClose}>
+            <MenuItem onClick={handleProfileClick}>마이페이지</MenuItem>
+            <Divider />
+            <MenuItem onClick={handleLogout}>로그아웃</MenuItem>
+          </Menu>
         </Toolbar>
       </AppBar>
 
@@ -399,13 +307,8 @@ function Feed() {
         <Container maxWidth="sm">
           <Card sx={{ marginBottom: 4, padding: 1.5 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', pb: 1 }}>
-              <Avatar src={profileImage} sx={{ width: 40, height: 40, mr: 1.5 }} />
-              <Button
-                fullWidth
-                variant="outlined"
-                onClick={() => setIsPostingModalOpen(true)}
-                sx={{ borderRadius: '20px', backgroundColor: '#f0f2ff' }}
-              >
+              <Avatar src={USER_PROFILE_SRC} sx={{ width: 40, height: 40, mr: 1.5 }} />
+              <Button fullWidth variant="outlined" onClick={() => setIsPostingModalOpen(true)} sx={{ borderRadius: '20px', backgroundColor: '#f0f2ff' }}>
                 어떤 이야기를 들려주실건가요?
               </Button>
             </Box>
@@ -427,33 +330,20 @@ function Feed() {
         </Container>
       </Box>
 
-      <PostingModal
-        open={isPostingModalOpen}
-        onClose={handleClosePostingModal}
-        onPost={handlePostFeed}
-        content={newPostContent}
-        onContentChange={handleContentChange}
-        onFileChange={handleFileChange}
-      />
+      <PostingModal open={isPostingModalOpen} onClose={handleClosePostingModal} onPost={handlePostFeed} content={newPostContent} onContentChange={handleContentChange} onFileChange={handleFileChange} />
 
       {/* 상세 모달 */}
       <Dialog open={open} onClose={handleClose} fullWidth maxWidth="lg">
         <DialogTitle>
           {selectedFeed?.content}
-          <IconButton sx={{ position: 'absolute', right: 8, top: 8 }} onClick={handleClose}>
-            <CloseIcon />
-          </IconButton>
+          <IconButton sx={{ position: 'absolute', right: 8, top: 8 }} onClick={handleClose}><CloseIcon /></IconButton>
         </DialogTitle>
 
         <DialogContent sx={{ display: 'flex' }}>
           <Box sx={{ flex: 1 }}>
             <Typography>{selectedFeed?.content}</Typography>
             {selectedFeed?.image_url && <img src={selectedFeed.image_url} style={{ width: '100%', marginTop: 10 }} />}
-
-            <Button
-              sx={{ mt: 2, color: isLiked ? '#1877f2' : '#606770' }}
-              onClick={handleLike}
-            >
+            <Button sx={{ mt: 2, color: isLiked ? '#1877f2' : '#606770' }} onClick={handleLike}>
               {isLiked ? '❤️' : '🤍'} 좋아요 ({likeCount})
             </Button>
             <Button sx={{ mt: 2 }} onClick={handleShare}>🔗 공유</Button>
@@ -466,31 +356,21 @@ function Feed() {
               {comments.map((comment, i) => (
                 <ListItem key={i}>
                   <ListItemAvatar>
-                    <Avatar>{comment.user_id[0].toUpperCase()}</Avatar>
+                    <Avatar src={comment.profile_img ? `http://localhost:3010${comment.profile_img}` : USER_PROFILE_SRC} />
                   </ListItemAvatar>
-                  <ListItemText primary={comment.comment} secondary={comment.user_id} />
+                  <ListItemText primary={comment.comment} secondary={comment.username || comment.user_id} />
                 </ListItem>
               ))}
             </List>
 
-            <TextField
-              fullWidth
-              label="댓글을 입력하세요"
-              value={newComment}
-              onChange={(e) => setNewComment(e.target.value)}
-            />
-
-            <Button fullWidth sx={{ mt: 1 }} variant="contained" onClick={handleAddComment}>
-              댓글 추가
-            </Button>
+            <TextField fullWidth label="댓글을 입력하세요" value={newComment} onChange={(e) => setNewComment(e.target.value)} />
+            <Button fullWidth sx={{ mt: 1 }} variant="contained" onClick={handleAddComment}>댓글 추가</Button>
           </Box>
         </DialogContent>
 
         <DialogActions>
           {selectedFeed && currentUserId && selectedFeed.user_id === currentUserId && (
-            <Button variant='contained' color="error" onClick={() => handleDelete(selectedFeed?.post_id)}>
-              삭제
-            </Button>
+            <Button variant='contained' color="error" onClick={() => handleDelete(selectedFeed?.post_id)}>삭제</Button>
           )}
           <Button onClick={handleClose}>닫기</Button>
         </DialogActions>

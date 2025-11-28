@@ -10,6 +10,9 @@ import {
     Avatar,
     Grid2,
     IconButton,
+    Menu,
+    MenuItem,
+    Divider
 } from '@mui/material';
 import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline';
 import HomeIcon from '@mui/icons-material/Home';
@@ -24,6 +27,7 @@ function Friends() {
     const [users, setUsers] = useState([]);
     const [currentUserId, setCurrentUserId] = useState(null);
     const [friendStatuses, setFriendStatuses] = useState({}); // 각 유저의 친구 상태 저장
+    const [anchorEl, setAnchorEl] = useState(null); // Avatar 메뉴용 상태
     const navigate = useNavigate();
 
     // 현재 로그인한 유저 정보 가져오기
@@ -59,7 +63,7 @@ function Friends() {
                     // 현재 사용자 자신은 리스트에서 제외
                     const filteredUsers = data.list.filter(user => user.user_id !== currentUserId);
                     setUsers(filteredUsers);
-                    
+
                     // 각 유저의 친구 상태 확인
                     if (currentUserId) {
                         checkFriendStatuses(filteredUsers, currentUserId);
@@ -75,7 +79,7 @@ function Friends() {
     const checkFriendStatuses = async (userList, userId) => {
         const token = localStorage.getItem("token");
         const statuses = {};
-        
+
         try {
             const response = await fetch(`http://localhost:3010/friends/${userId}`, {
                 headers: {
@@ -83,7 +87,7 @@ function Friends() {
                 }
             });
             const data = await response.json();
-            
+
             if (data.result && data.list) {
                 // 친구 관계를 맵으로 변환
                 userList.forEach(user => {
@@ -113,7 +117,7 @@ function Friends() {
                 statuses[user.user_id] = { status: 'none' };
             });
         }
-        
+
         setFriendStatuses(statuses);
     };
 
@@ -156,6 +160,29 @@ function Friends() {
             });
     };
 
+    // ------------------------------------
+    // 프로필 메뉴 열기
+    const handleMenuOpen = (event) => {
+        setAnchorEl(event.currentTarget);
+    };
+
+    // 프로필 메뉴 닫기
+    const handleMenuClose = () => {
+        setAnchorEl(null);
+    };
+
+    // 마이페이지로 이동
+    const handleProfileClick = () => {
+        navigate('/MyPage');
+        handleMenuClose();
+    };
+
+    // 로그아웃
+    const handleLogout = () => {
+        localStorage.removeItem("token");
+        navigate('/');
+        handleMenuClose();
+    };
 
     // ------------------------------------
     // 유저 카드 컴포넌트
@@ -228,7 +255,6 @@ function Friends() {
                     {user.username ? user.username[0].toUpperCase() : 'U'}
                 </Avatar>
 
-                
                 <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
                     {user.username}
                 </Typography>
@@ -280,14 +306,27 @@ function Friends() {
 
                     <Box>
                         <IconButton color="primary"><ChatBubbleOutlineIcon /></IconButton>
-                        <IconButton color="primary"><HomeIcon /></IconButton>
+                        <IconButton color="primary" onClick={() => navigate('/feed')}><HomeIcon /></IconButton>
                         <IconButton color="primary"><NotificationsNoneIcon /></IconButton>
                     </Box>
 
-                    <Avatar src={USER_PROFILE_SRC} sx={{ width: 40, height: 40 }} />
+                    <Avatar
+                        src={USER_PROFILE_SRC}
+                        sx={{ width: 40, height: 40 }}
+                        onClick={handleMenuOpen}
+                    />
+                    {/* 프로필 메뉴 */}
+                    <Menu
+                        anchorEl={anchorEl}
+                        open={Boolean(anchorEl)}
+                        onClose={handleMenuClose}
+                    >
+                        <MenuItem onClick={handleProfileClick}>마이페이지</MenuItem>
+                        <Divider />
+                        <MenuItem onClick={handleLogout}>로그아웃</MenuItem>
+                    </Menu>
                 </Toolbar>
             </AppBar>
-
 
             {/* ======================= 메인 화면 (User Cards) ======================= */}
             <Box

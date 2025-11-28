@@ -51,17 +51,32 @@ router.post("/", upload.single('file'), async (req, res) => {
 // ----------------------------------------
 router.get("/", async (req, res) => {
     try {
-        const [list] = await db.query(`
-            SELECT post_id, user_id, content, image_url, created_at, updated_at
-            FROM feed
-            ORDER BY created_at DESC
-        `);
-        res.json({ list, result: true });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ result: false, msg: "피드 조회 중 오류 발생" });
+        const sql = `
+            SELECT 
+                f.post_id,
+                f.user_id,
+                u.username,
+                u.profile_img,
+                f.content,
+                f.image_url,
+                f.created_at,
+                f.updated_at
+            FROM Feed f
+            JOIN Users u ON f.user_id = u.user_id
+            ORDER BY f.created_at DESC
+        `;
+        const [list] = await db.query(sql);
+
+        res.json({
+            list,
+            result: true
+        });
+    } catch (error) {
+        console.error(error);
+        res.json({ result: false, msg: "피드 목록 조회 중 오류 발생" });
     }
 });
+
 
 // ----------------------------------------
 // 3. 피드 삭제 (작성자만 가능)
