@@ -79,7 +79,7 @@ const AbuseReportCard = memo(({ report, onClick }) => (
   </Card>
 ));
 
-function AbuseReportPage() {
+function ChildAbuseReports() {
   const [reports, setReports] = useState([]);
   const [regions, setRegions] = useState([]);
   const [selectedReport, setSelectedReport] = useState(null);
@@ -350,4 +350,4 @@ function AbuseReportPage() {
   );
 }
 
-export default AbuseReportPage;
+export default ChildAbuseReports;

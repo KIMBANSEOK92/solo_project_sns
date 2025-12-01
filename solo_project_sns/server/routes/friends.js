@@ -3,6 +3,8 @@ const router = express.Router();
 const db = require("../db"); // 데이터베이스 연결 모듈
 const { v4: uuidv4 } = require("uuid"); // relation_id 생성을 위해 uuid 모듈 사용
 
+app.use('/uploads', express.static('uploads'));
+
 // =======================================================
 // 1. 전체 친구 목록 조회 (GET /friends)
 // (현재 로그인한 사용자 기준이 아닌, Friends 테이블 전체 조회)
@@ -35,8 +37,6 @@ router.get("/", async (req, res) => {
 router.get("/:userId", async (req, res) => {
     const { userId } = req.params;
     try {
-        // userId가 요청자이거나 수신자인 모든 친구 관계를 조회하고,
-        // 각 관계에서 상대방의 유저 정보를 JOIN합니다.
         const [list] = await db.query(`
             SELECT
                 f.relation_id,

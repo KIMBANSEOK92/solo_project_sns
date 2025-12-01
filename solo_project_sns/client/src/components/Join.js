@@ -117,7 +117,7 @@ function Join() {
       <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" minHeight="100vh">
         <Typography variant="h4" gutterBottom>회원가입</Typography>
 
-        <Box display="flex" alignItems="center">
+        <Box display="flex" alignItems="center" width="100%">
           <TextField inputRef={userId} label="아이디" variant="outlined" margin="normal" fullWidth />
           <Button sx={{ ml: 1 }} onClick={handleCheckId} variant="contained">중복확인</Button>
         </Box>
@@ -155,7 +155,7 @@ function Join() {
         </Button>
 
         <Typography variant="body2" sx={{ mt: 1 }}>
-          이미 회원이라면? <Link to="/login">로그인</Link>
+          이미 회원이라면? <Link to="/">로그인</Link>
         </Typography>
       </Box>
     </Container>

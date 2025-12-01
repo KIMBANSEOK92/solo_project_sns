@@ -8,6 +8,7 @@ const path = require('path');
 const fs = require('fs');
 
 const JWT_KEY = "server_secret_key";
+let codeStorage = {}; // 이메일 인증 코드 임시 저장
 
 // -----------------
 // Multer 설정
@@ -209,6 +210,70 @@ router.post("/login", async (req, res) => {
         console.error(error);
         res.json({ result: false, msg: "로그인 중 오류 발생" });
     }
+});
+
+// -----------------
+// 아이디 찾기 이메일 인증 코드 발송
+// -----------------
+router.post("/find-id/send-code", async (req, res) => {
+  const { email } = req.body;
+  try {
+    const [users] = await db.query("SELECT user_id FROM Users WHERE email = ?", [email]);
+    if (users.length === 0) return res.json({ result: false, msg: "등록된 이메일이 없습니다." });
+
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    codeStorage[email] = code;
+    res.json({ result: true, code }); // 테스트용으로 code 반환
+  } catch (err) {
+    console.error(err);
+    res.json({ result: false, msg: "서버 오류" });
+  }
+});
+
+// 인증 성공 후 아이디 반환
+router.post("/find-id/verify", async (req, res) => {
+  const { email } = req.body;
+  try {
+    const [users] = await db.query("SELECT user_id FROM Users WHERE email = ?", [email]);
+    if (users.length === 0) return res.json({ result: false, msg: "사용자를 찾을 수 없습니다." });
+    res.json({ userId: users[0].user_id });
+  } catch (err) {
+    console.error(err);
+    res.json({ result: false, msg: "서버 오류" });
+  }
+});
+
+// -----------------
+// 비밀번호 재설정 이메일 인증 코드 발송
+// -----------------
+router.post("/forgot-password/send-code", async (req, res) => {
+  const { email } = req.body;
+  try {
+    const [users] = await db.query("SELECT user_id FROM Users WHERE email = ?", [email]);
+    if (users.length === 0) return res.json({ result: false, msg: "등록된 이메일이 없습니다." });
+
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    codeStorage[email] = code;
+    res.json({ result: true, code }); // 테스트용으로 code 반환
+  } catch (err) {
+    console.error(err);
+    res.json({ result: false, msg: "서버 오류" });
+  }
+});
+
+// -----------------
+// 새 비밀번호 DB 업데이트
+// -----------------
+router.post("/reset-password", async (req, res) => {
+  const { email, newPassword } = req.body;
+  try {
+    const hashPwd = await bcrypt.hash(newPassword, 10);
+    await db.query("UPDATE Users SET password = ? WHERE email = ?", [hashPwd, email]);
+    res.json({ result: true, msg: "비밀번호가 변경되었습니다." });
+  } catch (err) {
+    console.error(err);
+    res.json({ result: false, msg: "비밀번호 변경 중 오류 발생" });
+  }
 });
 
 module.exports = router;

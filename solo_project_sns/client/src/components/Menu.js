@@ -9,22 +9,21 @@ import {
   ListItemIcon,
   Box,
   Avatar,
-  Collapse, //  드롭다운 애니메이션을 위한 컴포넌트
-  Divider //  시각적 구분을 위한 구분선
+  Collapse,
+  Divider
 } from '@mui/material';
 import {
   Home as HomeIcon,
   Search as SearchIcon,
   PeopleAlt as FriendsIcon,
   Favorite as SupportIcon,
-  ExpandLess, //  펼치기 아이콘
-  ExpandMore, //  접기 아이콘
-  LocationCity as LocationCityIcon //  지역 아이콘
+  ExpandLess,
+  ExpandMore,
+  LocationCity as LocationCityIcon
 } from '@mui/icons-material';
-import { Link, useLocation } from 'react-router-dom'; // 현재 경로 확인을 위해 useLocation 추가
+import { Link, useLocation } from 'react-router-dom';
 import { jwtDecode } from 'jwt-decode';
 
-// 이미지에서 보여지는 지역 목록 (Mock Data)
 const AREA_LIST = [
   { name: '서울특별시', emoji: '🐱‍🚀' },
   { name: '인천광역시', emoji: '🙈' },
@@ -58,11 +57,9 @@ const AREA_LIST = [
 ];
 
 function Menu() {
-  //  아동 찾기 메뉴 드롭다운 상태 관리
   const [openChildSearch, setOpenChildSearch] = useState(false);
   const location = useLocation();
 
-  //  드롭다운 토글 함수
   const handleClickChildSearch = () => {
     setOpenChildSearch(!openChildSearch);
   };
@@ -104,7 +101,6 @@ function Menu() {
     >
       <Toolbar />
 
-      {/* 👤 사용자 DB 정보 출력 영역 (기존 코드 유지) */}
       <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
         <Avatar
           alt={`${profileName} Profile`}
@@ -116,37 +112,25 @@ function Menu() {
         </Typography>
       </Box>
 
-      {/* 메뉴 리스트 */}
       <List sx={{ pt: 1 }}>
-        {/* 1. 피드 (기존 코드 유지) */}
-        <ListItem
-          button
-          component={Link}
-          to="/feed"
-          selected={location.pathname === '/feed'}
-        >
+
+        <ListItem button component={Link} to="/feed" selected={location.pathname === '/feed'}>
           <ListItemIcon sx={menuIconStyle}><HomeIcon /></ListItemIcon>
           <ListItemText primary="피드" primaryTypographyProps={{ style: menuItemStyle }} />
         </ListItem>
 
-        {/* 2. 아동 찾기 (드롭다운 트리거로 변경됨) */}
         <ListItem
           button
-          onClick={handleClickChildSearch} // 💡 추가: 클릭 이벤트
-          // 아동 찾기 페이지에 있거나 드롭다운이 열려 있을 때 선택된 스타일 적용
+          onClick={handleClickChildSearch}
           selected={location.pathname.startsWith('/childAbuseReports') || openChildSearch}
         >
           <ListItemIcon sx={menuIconStyle}><SearchIcon /></ListItemIcon>
           <ListItemText primary="아동 찾기" primaryTypographyProps={{ style: menuItemStyle }} />
-          {/*  펼침/접힘 아이콘 */}
           {openChildSearch ? <ExpandLess /> : <ExpandMore />}
         </ListItem>
 
-        {/* 2-1. 지역 목록 드롭다운 */}
         <Collapse in={openChildSearch} timeout="auto" unmountOnExit>
           <List component="div" disablePadding sx={{ pl: 2, backgroundColor: '#f0f0f0' }}>
-
-            {/* 전체 목록 보기 */}
             <ListItem
               button
               component={Link}
@@ -160,13 +144,11 @@ function Menu() {
 
             <Divider light />
 
-            {/* 지역별 목록 */}
             {AREA_LIST.map((area, index) => (
               <ListItem
                 button
                 key={index}
                 component={Link}
-                // Mock 경로: /childAbuseReports/seoul 같은 형태로 가정
                 to={`/childAbuseReports/${area.name}`}
                 selected={location.pathname === `/childAbuseReports/${area.name}`}
                 sx={{ py: 1 }}
@@ -180,27 +162,17 @@ function Menu() {
           </List>
         </Collapse>
 
-        {/* 3. 친구 (기존 코드 유지) */}
-        <ListItem
-          button
-          component={Link}
-          to="/friends"
-          selected={location.pathname === '/friends'}
-        >
+        <ListItem button component={Link} to="/friends" selected={location.pathname === '/friends'}>
           <ListItemIcon sx={menuIconStyle}><FriendsIcon /></ListItemIcon>
           <ListItemText primary="친구" primaryTypographyProps={{ style: menuItemStyle }} />
         </ListItem>
 
-        {/* 4. 후원 (기존 코드 유지) */}
-        <ListItem
-          button
-          component={Link}
-          to="/mui"
-          selected={location.pathname === '/mui'}
-        >
+        {/* ✔ 수정됨: 후원 메뉴 정상 동작 */}
+        <ListItem button component={Link} to="/donations" selected={location.pathname === '/donations'}>
           <ListItemIcon sx={menuIconStyle}><SupportIcon /></ListItemIcon>
           <ListItemText primary="후원" primaryTypographyProps={{ style: menuItemStyle }} />
         </ListItem>
+
       </List>
     </Drawer>
   );
