@@ -85,6 +85,10 @@ function ChildAbuseReports() {
   const [selectedReport, setSelectedReport] = useState(null);
   const [open, setOpen] = useState(false);
   const [addReportOpen, setAddReportOpen] = useState(false); // 신고 등록 폼 열기
+  const [editReportOpen, setEditReportOpen] = useState(false); // 신고 수정 폼 열기
+  const [editingReport, setEditingReport] = useState(null); // 수정 중인 신고
+  const [currentUserId, setCurrentUserId] = useState(null); // 현재 로그인한 사용자 ID
+  const [currentUserProfile, setCurrentUserProfile] = useState(null);
   const [newReport, setNewReport] = useState({
     region_name: "", // region_id 대신 region_name 사용 (사용자가 직접 입력)
     title: "",
@@ -100,11 +104,28 @@ function ChildAbuseReports() {
   const { regionName } = useParams(); // URL 파라미터에서 지역명 가져오기
 
   const token = localStorage.getItem("token");
-  const decode = token ? jwtDecode(token) : {};
-  const userName = decode?.userName || "사용자";
-  const profileImage = decode?.profileImage
-    ? `http://localhost:3010${decode.profileImage}`
-    : USER_PROFILE_SRC;
+
+  // 현재 로그인한 유저 ID 및 프로필 설정
+  useEffect(() => {
+    if (token) {
+      try {
+        const decoded = jwtDecode(token);
+        setCurrentUserId(decoded.userId);
+        
+        // 현재 사용자 프로필 정보 가져오기
+        fetch(`http://localhost:3010/users/${decoded.userId}/profile`)
+          .then(res => res.json())
+          .then(data => {
+            if (data.result && data.user) {
+              setCurrentUserProfile(data.user);
+            }
+          })
+          .catch(err => console.error("프로필 조회 실패:", err));
+      } catch (err) {
+        console.error("토큰 디코딩 실패:", err);
+      }
+    }
+  }, [token]);
 
   // ============================================================
   // 아동 학대 신고 목록 조회
@@ -139,6 +160,106 @@ function ChildAbuseReports() {
   const handleOpenModal = (report) => { setSelectedReport(report); setOpen(true); };
   const handleCloseModal = () => { setOpen(false); setSelectedReport(null); };
 
+  // 신고 수정 핸들러
+  const handleEditReport = (report) => {
+    setEditingReport(report);
+    setNewReport({
+      region_name: report.region_name || "",
+      title: report.title || "",
+      description: report.description || "",
+      status: report.status || "확인 중",
+      image: null,
+    });
+    setEditReportOpen(true);
+    setOpen(false);
+  };
+
+  // 신고 수정 제출
+  const handleEditReportSubmit = () => {
+    if (!editingReport) return;
+
+    if (!newReport.region_name || !newReport.region_name.trim()) {
+      alert("지역을 입력해주세요.");
+      return;
+    }
+    if (!newReport.title || !newReport.title.trim()) {
+      alert("제목을 입력해주세요.");
+      return;
+    }
+    if (!newReport.description || !newReport.description.trim()) {
+      alert("상세 내용을 입력해주세요.");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("region_name", newReport.region_name.trim());
+    formData.append("title", newReport.title.trim());
+    formData.append("description", newReport.description.trim());
+    formData.append("status", newReport.status || "확인 중");
+    if (newReport.image) formData.append("image", newReport.image);
+
+    const token = localStorage.getItem("token");
+    fetch(`http://localhost:3010/reports/${editingReport.report_id}`, {
+      method: "PUT",
+      headers: {
+        "Authorization": `Bearer ${token}`
+      },
+      body: formData
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.result) {
+          alert("신고가 수정되었습니다.");
+          setEditReportOpen(false);
+          setEditingReport(null);
+          setNewReport({
+            region_name: "",
+            title: "",
+            description: "",
+            status: "확인 중",
+            image: null,
+          });
+          loadReports();
+        } else {
+          alert(data.msg || "신고 수정에 실패하였습니다.");
+        }
+      })
+      .catch((err) => {
+        console.error("신고 수정 에러:", err);
+        alert("서버와의 연결에 실패했습니다. 다시 시도해주세요.");
+      });
+  };
+
+  // 신고 삭제 핸들러
+  const handleDeleteReport = (reportId) => {
+    if (!window.confirm("정말 이 신고를 삭제하시겠습니까?")) {
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+    fetch(`http://localhost:3010/reports/${reportId}`, {
+      method: "DELETE",
+      headers: {
+        "Authorization": `Bearer ${token}`
+      }
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.result) {
+          alert("신고가 삭제되었습니다.");
+          setOpen(false);
+          setSelectedReport(null);
+          loadReports();
+        } else {
+          alert(data.msg || "신고 삭제에 실패하였습니다.");
+        }
+      })
+      .catch((err) => {
+        console.error("신고 삭제 에러:", err);
+        alert("서버와의 연결에 실패했습니다. 다시 시도해주세요.");
+      });
+  };
+
   // ============================================================
   // 아동 학대 신고 등록 처리 함수
   // ============================================================
@@ -168,8 +289,15 @@ function ChildAbuseReports() {
     formData.append("status", newReport.status || "확인 중");
     if (newReport.image) formData.append("image", newReport.image);
 
-    // 서버로 신고 등록 요청 전송
-    fetch("http://localhost:3010/reports/add", { method: "POST", body: formData })
+    // 서버로 신고 등록 요청 전송 (토큰 포함)
+    const token = localStorage.getItem("token");
+    fetch("http://localhost:3010/reports/add", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${token}`
+      },
+      body: formData
+    })
       .then((res) => res.json())
       .then((data) => {
         if (data.result) {
@@ -219,7 +347,7 @@ function ChildAbuseReports() {
 
           {/* 수정: 프로필 Avatar 클릭 시 메뉴 */}
           <Avatar
-            src={profileImage}
+            src={currentUserProfile?.profileImage ? `http://localhost:3010${currentUserProfile.profileImage}` : USER_PROFILE_SRC}
             sx={{ width: 40, height: 40, cursor: 'pointer', }} // 커서 손가락으로 변경
             onClick={handleMenuOpen}
           />
@@ -234,6 +362,13 @@ function ChildAbuseReports() {
       {/* 콘텐츠 영역 */}
       <Box component="main" sx={{ marginTop: "64px", width: "100%", display: "flex", justifyContent: "center", pt: 4 }}>
         <Container maxWidth="sm">
+          {/* 신고 버튼을 맨 위로 이동 */}
+          <Box sx={{ textAlign: "center", mb: 4 }}>
+            <Button variant="contained" color="primary" startIcon={<AddIcon />} onClick={() => setAddReportOpen(true)}>
+              아동 학대 신고
+            </Button>
+          </Box>
+
           {/* 현재 선택된 지역 표시 */}
           {regionName && (
             <Box sx={{ mb: 3, textAlign: "center" }}>
@@ -259,13 +394,6 @@ function ChildAbuseReports() {
               </Typography>
             </Box>
           )}
-
-          {/* 아동 학대 신고 등록 버튼 */}
-          <Box sx={{ textAlign: "center", mt: 4 }}>
-            <Button variant="contained" color="primary" startIcon={<AddIcon />} onClick={() => setAddReportOpen(true)}>
-              아동 학대 신고
-            </Button>
-          </Box>
         </Container>
       </Box>
 
@@ -357,7 +485,75 @@ function ChildAbuseReports() {
           </Box>
         </DialogContent>
         <DialogActions>
+          {selectedReport && currentUserId && selectedReport.user_id === currentUserId && (
+            <>
+              <Button onClick={() => handleEditReport(selectedReport)} variant="outlined" color="primary">
+                수정
+              </Button>
+              <Button onClick={() => handleDeleteReport(selectedReport.report_id)} variant="contained" color="error">
+                삭제
+              </Button>
+            </>
+          )}
           <Button onClick={handleCloseModal}>닫기</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* 신고 수정 폼 */}
+      <Dialog open={editReportOpen} onClose={() => setEditReportOpen(false)} fullWidth maxWidth="sm">
+        <DialogTitle>아동 학대 신고 수정</DialogTitle>
+        <DialogContent>
+          <TextField
+            label="지역 *"
+            fullWidth
+            value={newReport.region_name}
+            onChange={(e) => setNewReport({ ...newReport, region_name: e.target.value })}
+            sx={{ mb: 2 }}
+            placeholder="예: 서울, 부산, 인천 등(경기도/경상도/전라도 등 도 X)"
+            required
+          />
+
+          <TextField
+            label="제목 *"
+            fullWidth
+            value={newReport.title}
+            onChange={(e) => setNewReport({ ...newReport, title: e.target.value })}
+            sx={{ mb: 2 }}
+            required
+          />
+          <TextField
+            label="상세 내용 *"
+            fullWidth
+            multiline
+            rows={4}
+            value={newReport.description}
+            onChange={(e) => setNewReport({ ...newReport, description: e.target.value })}
+            sx={{ mb: 2 }}
+            required
+          />
+          <FormControl fullWidth sx={{ mb: 2 }}>
+            <InputLabel>상태</InputLabel>
+            <Select value={newReport.status} onChange={(e) => setNewReport({ ...newReport, status: e.target.value })} label="상태">
+              <MuiMenuItem value="확인 중">확인 중</MuiMenuItem>
+              <MuiMenuItem value="조치 완료">조치 완료</MuiMenuItem>
+              <MuiMenuItem value="의심 단계">의심 단계</MuiMenuItem>
+            </Select>
+          </FormControl>
+          <TextField type="file" fullWidth onChange={(e) => setNewReport({ ...newReport, image: e.target.files[0] })} sx={{ mb: 2 }} />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => {
+            setNewReport({
+              region_name: "",
+              title: "",
+              description: "",
+              status: "확인 중",
+              image: null,
+            });
+            setEditReportOpen(false);
+            setEditingReport(null);
+          }}>취소</Button>
+          <Button onClick={handleEditReportSubmit} variant="contained" color="primary">수정</Button>
         </DialogActions>
       </Dialog>
     </Box>

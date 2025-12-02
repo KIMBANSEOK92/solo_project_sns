@@ -3,7 +3,29 @@ const router = express.Router();
 const db = require("../db"); // 데이터베이스 연결 모듈
 const { v4: uuidv4 } = require("uuid"); // relation_id 생성을 위해 uuid 모듈 사용
 
-app.use('/uploads', express.static('uploads'));
+// 알림 테이블 자동 생성 함수
+const ensureNotificationsTable = async () => {
+    try {
+        await db.query("SELECT 1 FROM notifications LIMIT 1");
+    } catch (tableErr) {
+        if (tableErr.code === 'ER_NO_SUCH_TABLE') {
+            await db.query(`
+                CREATE TABLE IF NOT EXISTS notifications (
+                    notification_id VARCHAR(255) PRIMARY KEY,
+                    user_id INT NOT NULL,
+                    type VARCHAR(50) NOT NULL,
+                    message TEXT,
+                    related_id VARCHAR(255),
+                    is_read BOOLEAN DEFAULT FALSE,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            `);
+            console.log("notifications 테이블 생성 완료");
+        } else {
+            throw tableErr;
+        }
+    }
+};
 
 // =======================================================
 // 1. 전체 친구 목록 조회 (GET /friends)
@@ -107,6 +129,27 @@ router.post("/", async (req, res) => {
             VALUES (?, ?, ?, 'pending')
         `, [relation_id, requester_id, receiver_id]);
 
+        // 요청 받은 사용자에게 알림 생성
+        try {
+            await ensureNotificationsTable();
+
+            // 요청한 사용자 정보 조회
+            const [requesterInfo] = await db.query(`
+                SELECT username FROM Users WHERE user_id = ?
+            `, [requester_id]);
+
+            const requesterName = requesterInfo.length > 0 ? requesterInfo[0].username : '사용자';
+            const notification_id = uuidv4();
+
+            await db.query(`
+                INSERT INTO notifications (notification_id, user_id, type, message, related_id, is_read)
+                VALUES (?, ?, 'friend_request', ?, ?, FALSE)
+            `, [notification_id, receiver_id, `${requesterName}님이 친구 요청을 보냈습니다.`, relation_id]);
+        } catch (notifErr) {
+            console.error("알림 생성 오류 (친구 요청은 성공):", notifErr);
+            // 알림 생성 실패해도 친구 요청은 성공으로 처리
+        }
+
         res.json({ result: true, msg: "친구 요청이 전송되었습니다.", relation_id });
 
     } catch (err) {
@@ -129,6 +172,22 @@ router.put("/accept", async (req, res) => {
     }
 
     try {
+        // 먼저 친구 요청 정보 조회
+        const [friendRequest] = await db.query(`
+            SELECT requester_id, receiver_id, status
+            FROM friends
+            WHERE relation_id = ?
+        `, [relation_id]);
+
+        if (friendRequest.length === 0) {
+            return res.status(404).json({ result: false, msg: "친구 요청을 찾을 수 없습니다." });
+        }
+
+        if (friendRequest[0].status !== 'pending') {
+            return res.status(400).json({ result: false, msg: "이미 처리된 요청입니다." });
+        }
+
+        // 친구 요청 수락
         const [result] = await db.query(`
             UPDATE friends
             SET status = 'accepted'
@@ -136,8 +195,39 @@ router.put("/accept", async (req, res) => {
         `, [relation_id]);
 
         if (result.affectedRows === 0) {
-            // 이미 수락되었거나 relation_id가 존재하지 않는 경우
-            return res.status(400).json({ result: false, msg: "유효하지 않은 요청 ID이거나 이미 처리되었습니다." });
+            return res.status(400).json({ result: false, msg: "친구 요청 수락에 실패했습니다." });
+        }
+
+        // 요청한 사용자에게 수락 알림 생성
+        try {
+            await ensureNotificationsTable();
+
+            // 수락한 사용자 정보 조회
+            const [accepterInfo] = await db.query(`
+                SELECT username FROM Users WHERE user_id = ?
+            `, [friendRequest[0].receiver_id]);
+
+            const accepterName = accepterInfo.length > 0 ? accepterInfo[0].username : '사용자';
+            const notification_id = uuidv4();
+
+            await db.query(`
+                INSERT INTO notifications (notification_id, user_id, type, message, related_id, is_read)
+                VALUES (?, ?, 'friend_accepted', ?, ?, FALSE)
+            `, [notification_id, friendRequest[0].requester_id, `${accepterName}님이 친구 요청을 수락했습니다.`, relation_id]);
+        } catch (notifErr) {
+            console.error("알림 생성 오류 (친구 수락은 성공):", notifErr);
+            // 알림 생성 실패해도 친구 수락은 성공으로 처리
+        }
+
+        // 관련 알림 삭제 (친구 요청 알림)
+        try {
+            await db.query(`
+                DELETE FROM notifications
+                WHERE related_id = ? AND type = 'friend_request'
+            `, [relation_id]);
+        } catch (delErr) {
+            console.error("알림 삭제 오류:", delErr);
+            // 알림 삭제 실패해도 무시
         }
 
         res.json({ result: true, msg: "친구 요청을 수락했습니다." });

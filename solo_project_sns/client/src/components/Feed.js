@@ -140,6 +140,12 @@ function Feed() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [currentUserId, setCurrentUserId] = useState(null);
 
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingFeed, setEditingFeed] = useState(null);
+  const [editContent, setEditContent] = useState('');
+  const [editFile, setEditFile] = useState(null);
+
+  const [currentUserProfile, setCurrentUserProfile] = useState(null);
   const [anchorEl, setAnchorEl] = useState(null);
   const navigate = useNavigate();
 
@@ -149,6 +155,16 @@ function Feed() {
       try {
         const decoded = jwtDecode(token);
         setCurrentUserId(decoded.userId);
+        
+        // 현재 사용자 프로필 정보 가져오기
+        fetch(`http://localhost:3010/users/${decoded.userId}/profile`)
+          .then(res => res.json())
+          .then(data => {
+            if (data.result && data.user) {
+              setCurrentUserProfile(data.user);
+            }
+          })
+          .catch(err => console.error("프로필 조회 실패:", err));
       } catch (err) {
         console.error("토큰 디코딩 실패:", err);
       }
@@ -244,6 +260,49 @@ function Feed() {
       });
   };
 
+  const handleEditOpen = useCallback((feed) => {
+    setEditingFeed(feed);
+    setEditContent(feed.content);
+    setEditFile(null);
+    setIsEditModalOpen(true);
+  }, []);
+
+  const handleEditClose = useCallback(() => {
+    setIsEditModalOpen(false);
+    setEditingFeed(null);
+    setEditContent('');
+    setEditFile(null);
+  }, []);
+
+  const handleEditFeed = useCallback(() => {
+    const token = localStorage.getItem("token");
+    if (!token) { alert("로그인 후 이용해주세요."); return; }
+
+    const formData = new FormData();
+    formData.append('content', editContent);
+    if (editFile) formData.append('file', editFile);
+
+    fetch(`http://localhost:3010/feed/${editingFeed.post_id}`, {
+      method: "PUT",
+      headers: { "Authorization": `Bearer ${token}` },
+      body: formData
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.result) {
+          alert(data.msg);
+          handleEditClose();
+          fnFeeds();
+          if (open && selectedFeed && selectedFeed.post_id === editingFeed.post_id) {
+            handleClose();
+          }
+        } else {
+          alert(data.msg);
+        }
+      })
+      .catch(err => { console.error(err); alert("게시물 수정 중 오류가 발생했습니다."); });
+  }, [editingFeed, editContent, editFile, open, selectedFeed]);
+
   const handleShare = () => {
     const token = localStorage.getItem("token");
     if (!token) { alert("로그인 후 이용해주세요."); return; }
@@ -295,7 +354,11 @@ function Feed() {
             <IconButton color="primary"><HomeIcon /></IconButton>
             <IconButton color="primary"><NotificationsNoneIcon /></IconButton>
           </Box>
-          <Avatar src={USER_PROFILE_SRC} sx={{ width: 40, height: 40, cursor: 'pointer' }} onClick={handleMenuOpen} />
+          <Avatar 
+            src={currentUserProfile?.profileImage ? `http://localhost:3010${currentUserProfile.profileImage}` : USER_PROFILE_SRC} 
+            sx={{ width: 40, height: 40, cursor: 'pointer' }} 
+            onClick={handleMenuOpen} 
+          />
           <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleMenuClose}>
             <MenuItem onClick={handleProfileClick}>마이페이지</MenuItem>
             <Divider />
@@ -304,26 +367,38 @@ function Feed() {
         </Toolbar>
       </AppBar>
 
-      {/* 기존 Box 수정:
-        1. width: 'calc(100% - 240px)'를 사용하여 사이드바(240px)를 제외한 정확한 너비를 계산합니다.
-        2. marginLeft: '240px'는 그대로 유지하여 사이드바 공간을 띄웁니다.
-        3. 중앙 정렬을 위해 Container를 사용하며, Container의 max-width가 가운데로 오게 됩니다.
-      */}
       <Box 
         component="main" 
         sx={{ 
           marginTop: '64px', 
           marginLeft: '240px', 
-          width: 'calc(100% - 240px)', // 사이드바 너비를 제외한 나머지 너비
+          width: 'calc(100% - 240px)',
           display: 'flex', 
-          justifyContent: 'center', // Container를 이 Box 내에서 수평 중앙 정렬
-          pt: 4 
+          justifyContent: 'center',
+          alignItems: 'flex-start',
+          pt: 4,
+          pb: 4,
+          minHeight: 'calc(100vh - 64px)'
         }}
       >
-        <Container maxWidth="sm">
-          <Card sx={{ marginBottom: 4, padding: 1.5 }}>
+        <Container 
+          maxWidth="sm" 
+          sx={{ 
+            width: '100%',
+            maxWidth: '600px !important',
+            px: { xs: 2, sm: 3 },
+            mx: 'auto',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center'
+          }}
+        >
+          <Card sx={{ marginBottom: 4, padding: 1.5, width: '100%' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', pb: 1 }}>
-              <Avatar src={USER_PROFILE_SRC} sx={{ width: 40, height: 40, mr: 1.5 }} />
+              <Avatar 
+                src={currentUserProfile?.profileImage ? `http://localhost:3010${currentUserProfile.profileImage}` : USER_PROFILE_SRC} 
+                sx={{ width: 40, height: 40, mr: 1.5 }} 
+              />
               <Button fullWidth variant="outlined" onClick={() => setIsPostingModalOpen(true)} sx={{ borderRadius: '20px', backgroundColor: '#f0f2ff' }}>
                 어떤 이야기를 들려주실건가요?
               </Button>
@@ -331,16 +406,15 @@ function Feed() {
           </Card>
 
           {feeds.length > 0 ? (
-            // Grid2 대신 Grid 사용
-            <Grid container spacing={3}> 
+            <Box sx={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
               {feeds.map(feed => (
-                <Grid item xs={12} key={feed.post_id}>
+                <Box key={feed.post_id} sx={{ width: '100%', mb: 2 }}>
                   <FeedCard feed={feed} onFeedClick={handleClickOpen} />
-                </Grid>
+                </Box>
               ))}
-            </Grid>
+            </Box>
           ) : (
-            <Box sx={{ textAlign: 'center', mt: 5 }}>
+            <Box sx={{ textAlign: 'center', mt: 5, width: '100%' }}>
               <Typography>등록된 피드가 없습니다. 피드를 등록해보세요!</Typography>
             </Box>
           )}
@@ -387,9 +461,43 @@ function Feed() {
 
         <DialogActions>
           {selectedFeed && currentUserId && selectedFeed.user_id === currentUserId && (
-            <Button variant='contained' color="error" onClick={() => handleDelete(selectedFeed?.post_id)}>삭제</Button>
+            <>
+              <Button variant='contained' color="primary" onClick={() => { handleClose(); handleEditOpen(selectedFeed); }}>수정</Button>
+              <Button variant='contained' color="error" onClick={() => handleDelete(selectedFeed?.post_id)}>삭제</Button>
+            </>
           )}
           <Button onClick={handleClose}>닫기</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* 수정 모달 */}
+      <Dialog open={isEditModalOpen} onClose={handleEditClose} fullWidth maxWidth="sm">
+        <DialogTitle>게시물 수정</DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="내용 수정"
+            fullWidth
+            multiline
+            rows={4}
+            value={editContent}
+            onChange={(e) => setEditContent(e.target.value)}
+          />
+
+          <Button variant="outlined" component="label" sx={{ mt: 2 }}>
+            새 사진/동영상 추가
+            <input type="file" hidden onChange={e => setEditFile(e.target.files[0])} />
+          </Button>
+          {editFile && (
+            <Typography variant="caption" sx={{ display: 'block', mt: 1 }}>
+              선택된 파일: {editFile.name}
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleEditClose} color="secondary">취소</Button>
+          <Button onClick={handleEditFeed} variant="contained">수정 완료</Button>
         </DialogActions>
       </Dialog>
     </Box>

@@ -79,7 +79,71 @@ router.get("/", async (req, res) => {
 
 
 // ----------------------------------------
-// 3. 피드 삭제 (작성자만 가능)
+// 3. 피드 수정 (작성자만 가능)
+// ----------------------------------------
+router.put("/:postId", upload.single('file'), async (req, res) => {
+    const { postId } = req.params;
+    const { content } = req.body;
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if (!token) {
+        return res.status(401).json({ result: false, msg: "로그인이 필요합니다." });
+    }
+
+    try {
+        const jwt = require('jsonwebtoken');
+        const decoded = jwt.verify(token, 'server_secret_key');
+        const userId = decoded.userId;
+
+        // 게시물 존재 여부 및 작성자 확인
+        const [feedRows] = await db.query(
+            "SELECT user_id, image_url FROM feed WHERE post_id = ?",
+            [postId]
+        );
+
+        if (feedRows.length === 0) {
+            return res.status(404).json({ result: false, msg: "게시물을 찾을 수 없습니다." });
+        }
+
+        if (feedRows[0].user_id !== userId) {
+            return res.status(403).json({ result: false, msg: "본인이 작성한 게시물만 수정할 수 있습니다." });
+        }
+
+        let imageUrl = feedRows[0].image_url;
+
+        // 새 이미지가 업로드되면 기존 이미지 삭제 후 새 이미지 URL 저장
+        if (req.file) {
+            // 기존 이미지 파일 삭제
+            if (imageUrl) {
+                try {
+                    const filePath = path.join(uploadDir, path.basename(imageUrl));
+                    if (fs.existsSync(filePath)) {
+                        fs.unlinkSync(filePath);
+                    }
+                } catch (fileErr) {
+                    console.error("기존 이미지 파일 삭제 실패:", fileErr);
+                }
+            }
+            imageUrl = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
+        }
+
+        // 게시물 업데이트
+        await db.query(
+            `UPDATE feed SET content = ?, image_url = ?, updated_at = NOW() WHERE post_id = ?`,
+            [content, imageUrl, postId]
+        );
+
+        res.json({ result: true, msg: "게시물이 수정되었습니다." });
+
+    } catch (err) {
+        console.error("게시물 수정 중 오류 발생:", err);
+        res.status(500).json({ result: false, msg: "게시물 수정 실패" });
+    }
+});
+
+// ----------------------------------------
+// 4. 피드 삭제 (작성자만 가능)
 // ----------------------------------------
 // 트랜잭션을 사용하여 데이터 일관성을 보장하고,
 // 외래키 제약조건(ON DELETE CASCADE)으로 인해 관련 데이터가 자동 삭제됩니다.

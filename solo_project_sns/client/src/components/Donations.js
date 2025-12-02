@@ -84,12 +84,27 @@ function Donations() {
   const [donationAmount, setDonationAmount] = useState('');
   const [donationMessage, setDonationMessage] = useState('');
   const [editingDonation, setEditingDonation] = useState(null);
+  const [currentUserProfile, setCurrentUserProfile] = useState(null);
   const [anchorEl, setAnchorEl] = useState(null); // 🔹 메뉴용 상태
   const navigate = useNavigate();
 
   const token = localStorage.getItem("token");
   const decode = token ? jwtDecode(token) : {};
   const userId = decode?.userId;
+
+  // 현재 사용자 프로필 정보 가져오기
+  useEffect(() => {
+    if (userId) {
+      fetch(`http://localhost:3010/users/${userId}/profile`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.result && data.user) {
+            setCurrentUserProfile(data.user);
+          }
+        })
+        .catch(err => console.error("프로필 조회 실패:", err));
+    }
+  }, [userId]);
 
   const loadDonationList = useCallback(() => {
     fetch("http://localhost:3010/donation/list")
@@ -204,7 +219,7 @@ function Donations() {
           {/* 🔹 우측 프로필 메뉴 */}
           <Box>
             <Avatar
-              src={decode?.profile_img ? `http://localhost:3010${decode.profile_img}` : USER_PROFILE_SRC}
+              src={currentUserProfile?.profileImage ? `http://localhost:3010${currentUserProfile.profileImage}` : USER_PROFILE_SRC}
               sx={{ width: 40, height: 40 }}
               onClick={handleMenuOpen}
               style={{ cursor: "pointer" }}
