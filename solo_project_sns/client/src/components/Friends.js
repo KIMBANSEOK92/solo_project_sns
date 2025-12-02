@@ -234,7 +234,7 @@ function Friends() {
                         <IconButton color="primary" onClick={() => navigate('/feed')}><HomeIcon /></IconButton>
                         <IconButton color="primary"><NotificationsNoneIcon /></IconButton>
                     </Box>
-                    <Avatar src={USER_PROFILE_SRC} sx={{ width: 40, height: 40 }} onClick={handleMenuOpen} />
+                    <Avatar src={USER_PROFILE_SRC} sx={{ width: 40, height: 40, cursor: 'pointer' }} onClick={handleMenuOpen} />
                     <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleMenuClose}>
                         <MenuItem onClick={handleProfileClick}>마이페이지</MenuItem>
                         <Divider />

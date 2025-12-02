@@ -29,7 +29,7 @@ router.post("/reports/add", upload.single('image'), async (req, res) => {
         // 아동학대 신고 등록
         await db.query(
             `INSERT INTO child_abuse_reports (region_id, title, description, image_url, status, reported_at)
-             VALUES (?, ?, ?, ?, ?, NOW())`,
+             VALUES (?, ?, ?, ?, ?, NOW())`,
             [region_id, title, description, imageUrl, status]
         );
 
@@ -44,18 +44,18 @@ router.post("/reports/add", upload.single('image'), async (req, res) => {
 router.get("/reports", async (req, res) => {
     try {
         const sql = `
-            SELECT 
-                r.region_name,
-                c.report_id,
-                c.title,
-                c.description,
-                c.image_url,
-                c.status,
-                c.reported_at
-            FROM child_abuse_reports c
-            JOIN regions r ON c.region_id = r.region_id
-            ORDER BY c.reported_at DESC
-        `;
+            SELECT 
+                r.region_name,
+                c.report_id,
+                c.title,
+                c.description,
+                c.image_url,
+                c.status,
+                c.reported_at
+            FROM child_abuse_reports c
+            JOIN regions r ON c.region_id = r.region_id
+            ORDER BY c.reported_at DESC
+        `;
         const [list] = await db.query(sql);
 
         res.json({

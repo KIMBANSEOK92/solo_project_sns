@@ -20,7 +20,8 @@ import {
   ListItemText,
   ListItemAvatar,
   Avatar,
-  Grid2,
+  // Grid2 대신 Grid를 사용하겠습니다.
+  Grid, 
   Menu,
   MenuItem,
   Divider
@@ -294,7 +295,7 @@ function Feed() {
             <IconButton color="primary"><HomeIcon /></IconButton>
             <IconButton color="primary"><NotificationsNoneIcon /></IconButton>
           </Box>
-          <Avatar src={USER_PROFILE_SRC} sx={{ width: 40, height: 40 }} onClick={handleMenuOpen} />
+          <Avatar src={USER_PROFILE_SRC} sx={{ width: 40, height: 40, cursor: 'pointer' }} onClick={handleMenuOpen} />
           <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleMenuClose}>
             <MenuItem onClick={handleProfileClick}>마이페이지</MenuItem>
             <Divider />
@@ -303,7 +304,22 @@ function Feed() {
         </Toolbar>
       </AppBar>
 
-      <Box component="main" sx={{ marginTop: '64px', marginLeft: '240px', width: 'calc(100% - 240px)', display: 'flex', justifyContent: 'center', pt: 4 }}>
+      {/* 기존 Box 수정:
+        1. width: 'calc(100% - 240px)'를 사용하여 사이드바(240px)를 제외한 정확한 너비를 계산합니다.
+        2. marginLeft: '240px'는 그대로 유지하여 사이드바 공간을 띄웁니다.
+        3. 중앙 정렬을 위해 Container를 사용하며, Container의 max-width가 가운데로 오게 됩니다.
+      */}
+      <Box 
+        component="main" 
+        sx={{ 
+          marginTop: '64px', 
+          marginLeft: '240px', 
+          width: 'calc(100% - 240px)', // 사이드바 너비를 제외한 나머지 너비
+          display: 'flex', 
+          justifyContent: 'center', // Container를 이 Box 내에서 수평 중앙 정렬
+          pt: 4 
+        }}
+      >
         <Container maxWidth="sm">
           <Card sx={{ marginBottom: 4, padding: 1.5 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', pb: 1 }}>
@@ -315,13 +331,14 @@ function Feed() {
           </Card>
 
           {feeds.length > 0 ? (
-            <Grid2 container spacing={3}>
+            // Grid2 대신 Grid 사용
+            <Grid container spacing={3}> 
               {feeds.map(feed => (
-                <Grid2 item xs={12} key={feed.post_id}>
+                <Grid item xs={12} key={feed.post_id}>
                   <FeedCard feed={feed} onFeedClick={handleClickOpen} />
-                </Grid2>
+                </Grid>
               ))}
-            </Grid2>
+            </Grid>
           ) : (
             <Box sx={{ textAlign: 'center', mt: 5 }}>
               <Typography>등록된 피드가 없습니다. 피드를 등록해보세요!</Typography>

@@ -27,7 +27,6 @@ import {
   MenuItem as MuiMenuItem,
   InputLabel,
   FormControl,
-  InputAdornment,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline';
@@ -93,6 +92,10 @@ function ChildAbuseReports() {
     image: null,
   });
   const [loadingRegions, setLoadingRegions] = useState(false); // 지역 로딩 상태 관리
+
+  // 수정: 프로필 메뉴 상태 추가
+  const [anchorEl, setAnchorEl] = useState(null);
+
   const navigate = useNavigate();
 
   const token = localStorage.getItem("token");
@@ -107,16 +110,11 @@ function ChildAbuseReports() {
     setLoadingRegions(true);
     fetch("http://localhost:3010/regions")
       .then((res) => {
-        if (!res.ok) {
-          throw new Error("지역 목록을 가져오는 데 실패했습니다.");
-        }
+        if (!res.ok) throw new Error("지역 목록을 가져오는 데 실패했습니다.");
         return res.json();
       })
       .then((data) => setRegions(data.list || []))
-      .catch((err) => {
-        console.error(err);
-        alert("서버에서 지역 목록을 가져오는 데 실패했습니다.");
-      })
+      .catch((err) => { console.error(err); alert("서버에서 지역 목록을 가져오는 데 실패했습니다."); })
       .finally(() => setLoadingRegions(false));
   }, []);
 
@@ -124,16 +122,11 @@ function ChildAbuseReports() {
   const loadReports = useCallback(() => {
     fetch("http://localhost:3010/reports")
       .then((res) => {
-        if (!res.ok) {
-          throw new Error("신고 목록을 가져오는 데 실패했습니다.");
-        }
+        if (!res.ok) throw new Error("신고 목록을 가져오는 데 실패했습니다.");
         return res.json();
       })
       .then((data) => setReports(data.list || []))
-      .catch((err) => {
-        console.error(err);
-        alert("서버에서 아동 학대 신고 목록을 가져오는 데 실패했습니다.");
-      });
+      .catch((err) => { console.error(err); alert("서버에서 아동 학대 신고 목록을 가져오는 데 실패했습니다."); });
   }, []);
 
   useEffect(() => {
@@ -141,16 +134,8 @@ function ChildAbuseReports() {
     loadReports();
   }, [loadRegions, loadReports]);
 
-  // 상세 모달 열기
-  const handleOpenModal = (report) => {
-    setSelectedReport(report);
-    setOpen(true);
-  };
-
-  const handleCloseModal = () => {
-    setOpen(false);
-    setSelectedReport(null);
-  };
+  const handleOpenModal = (report) => { setSelectedReport(report); setOpen(true); };
+  const handleCloseModal = () => { setOpen(false); setSelectedReport(null); };
 
   const handleAddReportSubmit = () => {
     const formData = new FormData();
@@ -158,29 +143,25 @@ function ChildAbuseReports() {
     formData.append("title", newReport.title);
     formData.append("description", newReport.description);
     formData.append("status", newReport.status);
-    if (newReport.image) {
-      formData.append("image", newReport.image);
-    }
+    if (newReport.image) formData.append("image", newReport.image);
 
-    fetch("http://localhost:3010/reports/add", {
-      method: "POST",
-      body: formData,
-    })
+    fetch("http://localhost:3010/reports/add", { method: "POST", body: formData })
       .then((res) => res.json())
       .then((data) => {
         if (data.result) {
           alert("아동 학대 신고가 완료되었습니다.");
           setAddReportOpen(false);
           loadReports(); // 신고 목록 새로 고침
-        } else {
-          alert("신고 등록에 실패하였습니다.");
-        }
+        } else alert("신고 등록에 실패하였습니다.");
       })
-      .catch((err) => {
-        console.error(err);
-        alert("서버와의 연결에 실패했습니다.");
-      });
+      .catch((err) => { console.error(err); alert("서버와의 연결에 실패했습니다."); });
   };
+
+  // 수정: 프로필 메뉴 열기/닫기 및 액션
+  const handleMenuOpen = (event) => setAnchorEl(event.currentTarget);
+  const handleMenuClose = () => setAnchorEl(null);
+  const handleProfileClick = () => { navigate("/MyPage"); handleMenuClose(); };
+  const handleLogout = () => { localStorage.removeItem("token"); navigate("/"); handleMenuClose(); };
 
   return (
     <Box sx={{ flexGrow: 1, backgroundColor: "#f0f2f5", minHeight: "100vh", display: "flex" }}>
@@ -189,9 +170,7 @@ function ChildAbuseReports() {
         <Toolbar sx={{ display: "flex", justifyContent: "space-between" }}>
           <Box sx={{ display: "flex", alignItems: "center" }}>
             <Avatar src="cp_logo.png" sx={{ width: 40, height: 40, mr: 1 }} />
-            <Typography variant="h6" sx={{ color: "#1877f2", fontWeight: "bold" }}>
-              Child Protection
-            </Typography>
+            <Typography variant="h6" sx={{ color: "#1877f2", fontWeight: "bold" }}>Child Protection</Typography>
           </Box>
 
           <Box>
@@ -200,11 +179,17 @@ function ChildAbuseReports() {
             <IconButton color="primary"><NotificationsNoneIcon /></IconButton>
           </Box>
 
+          {/* 수정: 프로필 Avatar 클릭 시 메뉴 */}
           <Avatar
             src={profileImage}
-            sx={{ width: 40, height: 40 }}
-            onClick={() => navigate('/profile')}
+            sx={{ width: 40, height: 40, cursor: 'pointer', }} // 커서 손가락으로 변경
+            onClick={handleMenuOpen}
           />
+          <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleMenuClose}>
+            <MenuItem onClick={handleProfileClick}>마이페이지</MenuItem>
+            <Divider />
+            <MenuItem onClick={handleLogout}>로그아웃</MenuItem>
+          </Menu>
         </Toolbar>
       </AppBar>
 
@@ -227,12 +212,7 @@ function ChildAbuseReports() {
 
           {/* 아동 학대 신고 등록 버튼 */}
           <Box sx={{ textAlign: "center", mt: 4 }}>
-            <Button
-              variant="contained"
-              color="primary"
-              startIcon={<AddIcon />}
-              onClick={() => setAddReportOpen(true)}
-            >
+            <Button variant="contained" color="primary" startIcon={<AddIcon />} onClick={() => setAddReportOpen(true)}>
               아동 학대 신고
             </Button>
           </Box>
@@ -247,65 +227,33 @@ function ChildAbuseReports() {
                   value={newReport.region_id}
                   onChange={(e) => setNewReport({ ...newReport, region_id: e.target.value })}
                   label="지역"
-                  disabled={loadingRegions} // 로딩 중에는 비활성화
+                  disabled={loadingRegions}
                 >
                   {loadingRegions ? (
-                    <MuiMenuItem value="">
-                      <em>로딩 중...</em>
-                    </MuiMenuItem>
+                    <MuiMenuItem value=""><em>로딩 중...</em></MuiMenuItem>
                   ) : (
                     regions.length > 0 ? (
                       regions.map((region) => (
-                        <MuiMenuItem key={region.region_id} value={region.region_id}>
-                          {region.region_name}
-                        </MuiMenuItem>
+                        <MuiMenuItem key={region.region_id} value={region.region_id}>{region.region_name}</MuiMenuItem>
                       ))
                     ) : (
-                      <MuiMenuItem value="">
-                        <em>지역 정보가 없습니다.</em>
-                      </MuiMenuItem>
+                      <MuiMenuItem value=""><em>지역 정보가 없습니다.</em></MuiMenuItem>
                     )
                   )}
                 </Select>
               </FormControl>
 
-              <TextField
-                label="제목"
-                fullWidth
-                value={newReport.title}
-                onChange={(e) => setNewReport({ ...newReport, title: e.target.value })}
-                sx={{ mb: 2 }}
-              />
-
-              <TextField
-                label="상세 내용"
-                fullWidth
-                multiline
-                rows={4}
-                value={newReport.description}
-                onChange={(e) => setNewReport({ ...newReport, description: e.target.value })}
-                sx={{ mb: 2 }}
-              />
-
+              <TextField label="제목" fullWidth value={newReport.title} onChange={(e) => setNewReport({ ...newReport, title: e.target.value })} sx={{ mb: 2 }} />
+              <TextField label="상세 내용" fullWidth multiline rows={4} value={newReport.description} onChange={(e) => setNewReport({ ...newReport, description: e.target.value })} sx={{ mb: 2 }} />
               <FormControl fullWidth sx={{ mb: 2 }}>
                 <InputLabel>상태</InputLabel>
-                <Select
-                  value={newReport.status}
-                  onChange={(e) => setNewReport({ ...newReport, status: e.target.value })}
-                  label="상태"
-                >
+                <Select value={newReport.status} onChange={(e) => setNewReport({ ...newReport, status: e.target.value })} label="상태">
                   <MuiMenuItem value="확인 중">확인 중</MuiMenuItem>
                   <MuiMenuItem value="조치 완료">조치 완료</MuiMenuItem>
                   <MuiMenuItem value="의심 단계">의심 단계</MuiMenuItem>
                 </Select>
               </FormControl>
-
-              <TextField
-                type="file"
-                fullWidth
-                onChange={(e) => setNewReport({ ...newReport, image: e.target.files[0] })}
-                sx={{ mb: 2 }}
-              />
+              <TextField type="file" fullWidth onChange={(e) => setNewReport({ ...newReport, image: e.target.files[0] })} sx={{ mb: 2 }} />
             </DialogContent>
             <DialogActions>
               <Button onClick={() => setAddReportOpen(false)}>취소</Button>
@@ -323,17 +271,11 @@ function ChildAbuseReports() {
             <CloseIcon />
           </IconButton>
         </DialogTitle>
-
         <DialogContent sx={{ display: "flex" }}>
           <Box sx={{ flex: 1 }}>
             {selectedReport?.image_url && (
-              <img
-                src={selectedReport.image_url}
-                alt="report"
-                style={{ width: "100%", borderRadius: "6px" }}
-              />
+              <img src={selectedReport.image_url} alt="report" style={{ width: "100%", borderRadius: "6px" }} />
             )}
-
             <Typography variant="h6" sx={{ mt: 2 }}>기본 정보</Typography>
             <Typography>제목: {selectedReport?.title}</Typography>
             <Typography>상태: {selectedReport?.status}</Typography>
@@ -341,7 +283,6 @@ function ChildAbuseReports() {
             <Typography>설명: {selectedReport?.description}</Typography>
           </Box>
         </DialogContent>
-
         <DialogActions>
           <Button onClick={handleCloseModal}>닫기</Button>
         </DialogActions>

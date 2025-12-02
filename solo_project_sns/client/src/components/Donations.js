@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, memo } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   AppBar,
   Toolbar,
@@ -14,38 +14,23 @@ import {
   IconButton,
   DialogActions,
   Button,
-  List,
-  ListItem,
-  ListItemText,
   Avatar,
-  Grid2,
+  TextField,
   Menu,
   MenuItem,
-  Divider,
-  TextField,
+  Divider
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
-import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline';
-import HomeIcon from '@mui/icons-material/Home';
-import NotificationsNoneIcon from '@mui/icons-material/NotificationsNone';
-import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 import { jwtDecode } from 'jwt-decode';
 import { useNavigate } from "react-router-dom";
 
 const USER_PROFILE_SRC = "/mr_kim_profile.jpg";
 
-// --------------------------------------------------
-// Donation Card (기존 디자인 그대로 유지)
-// --------------------------------------------------
-const DonationCard = memo(({ donation, onClick }) => (
+const DonationCard = ({ donation, onClick, onEdit, onDelete, canEdit }) => (
   <Card sx={{ marginBottom: 2, borderRadius: "8px", boxShadow: "0 1px 2px rgba(0,0,0,0.2)" }}>
     <Box sx={{ display: "flex", alignItems: "center", p: 1.5 }}>
       <Avatar
-        src={
-          donation.profile_image
-            ? `http://localhost:3010${donation.profile_image}`
-            : USER_PROFILE_SRC
-        }
+        src={donation.profile_image ? `http://localhost:3010${donation.profile_image}` : USER_PROFILE_SRC}
         sx={{ width: 32, height: 32, mr: 1 }}
       />
       <Typography variant="body1" sx={{ fontWeight: "bold" }}>
@@ -72,47 +57,43 @@ const DonationCard = memo(({ donation, onClick }) => (
       </Typography>
     </CardContent>
 
-    <Box
-      sx={{ display: "flex", justifyContent: "space-around", borderTop: "1px solid #ddd", p: 1 }}
-    >
-      <Button
-        sx={{ color: "#606770" }}
-        startIcon={<VisibilityOutlinedIcon />}
-        onClick={() => onClick(donation)}
-      >
+    <Box sx={{ display: "flex", justifyContent: "space-around", borderTop: "1px solid #ddd", p: 1 }}>
+      <Button sx={{ color: "#606770" }} onClick={() => onClick(donation)}>
         상세보기
       </Button>
+
+      {canEdit && (
+        <>
+          <Button sx={{ color: "#606770" }} onClick={() => onEdit(donation)}>
+            수정
+          </Button>
+          <Button sx={{ color: "#f44336" }} onClick={() => onDelete(donation.donation_id)}>
+            삭제
+          </Button>
+        </>
+      )}
     </Box>
   </Card>
-));
+);
 
 function Donations() {
   const [donations, setDonations] = useState([]);
   const [selectedDonation, setSelectedDonation] = useState(null);
   const [openDetail, setOpenDetail] = useState(false);
   const [openDonate, setOpenDonate] = useState(false);
-  const [anchorEl, setAnchorEl] = useState(null);
   const [donationAmount, setDonationAmount] = useState('');
   const [donationMessage, setDonationMessage] = useState('');
+  const [editingDonation, setEditingDonation] = useState(null);
+  const [anchorEl, setAnchorEl] = useState(null); // 🔹 메뉴용 상태
   const navigate = useNavigate();
 
   const token = localStorage.getItem("token");
   const decode = token ? jwtDecode(token) : {};
   const userId = decode?.userId;
 
-  const profileImage = decode?.profile_img
-    ? `http://localhost:3010${decode.profile_img}`
-    : USER_PROFILE_SRC;
-
-  // --------------------------------------------------
-  // 후원 목록 불러오기
-  // --------------------------------------------------
   const loadDonationList = useCallback(() => {
     fetch("http://localhost:3010/donation/list")
-      .then(res => {
-        if (!res.ok) throw new Error("서버 오류");
-        return res.json();
-      })
+      .then(res => res.json())
       .then(data => setDonations(data.list || []))
       .catch(err => console.error("후원 목록 로드 오류:", err));
   }, []);
@@ -121,64 +102,96 @@ function Donations() {
     loadDonationList();
   }, [loadDonationList]);
 
-  // --------------------------------------------------
-  // 상세보기 모달
-  // --------------------------------------------------
   const handleOpenDetail = (donation) => {
     setSelectedDonation(donation);
     setOpenDetail(true);
   };
   const handleCloseDetail = () => setOpenDetail(false);
 
-  // --------------------------------------------------
-  // 후원 등록 모달
-  // --------------------------------------------------
   const handleOpenDonate = () => setOpenDonate(true);
   const handleCloseDonate = () => {
     setDonationAmount('');
     setDonationMessage('');
     setOpenDonate(false);
+    setEditingDonation(null);
   };
 
-  // --------------------------------------------------
-  // 후원 등록
-  // --------------------------------------------------
   const handleDonate = () => {
     if (!donationAmount) return alert("후원 금액을 입력해주세요.");
     if (!userId) return alert("로그인이 필요합니다.");
 
     const payload = {
       user_id: userId,
-      amount: donationAmount,
+      amount: Number(donationAmount),
       message: donationMessage,
     };
 
-    fetch("http://localhost:3010/donation/add", {
-      method: "POST",
+    const url = editingDonation ? `http://localhost:3010/donation/edit/${editingDonation.donation_id}` : "http://localhost:3010/donation/add";
+
+    fetch(url, {
+      method: editingDonation ? "PUT" : "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
     })
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) {
+          return res.json().then(errorData => {
+            console.error("서버 에러 응답:", errorData);
+            throw new Error(errorData.msg || "후원 등록/수정 중 알 수 없는 서버 오류 발생");
+          });
+        }
+        return res.json();
+      })
       .then(data => {
         if (data.result) {
-          alert("후원이 완료되었습니다!");
+          alert(editingDonation ? "후원 수정 완료" : "후원 완료");
           handleCloseDonate();
           loadDonationList();
         } else {
-          alert("후원 실패");
+          alert("후원 실패: " + (data.msg || "알 수 없는 오류"));
         }
       })
-      .catch(err => console.error("후원 등록 오류:", err));
+      .catch(err => {
+        alert("후원 등록/수정 오류: " + err.message);
+        console.error("클라이언트 처리 오류:", err);
+      });
   };
 
+  const handleEditDonation = (donation) => {
+    setEditingDonation(donation);
+    setDonationAmount(String(donation.amount));
+    setDonationMessage(donation.message || '');
+    setOpenDonate(true);
+  };
+
+  const handleDeleteDonation = (donationId) => {
+    if (window.confirm("정말로 이 후원을 삭제하시겠습니까?")) {
+      fetch(`http://localhost:3010/donation/delete/${donationId}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: userId })
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.result) {
+            alert("후원이 삭제되었습니다.");
+            loadDonationList();
+          } else {
+            alert("삭제 실패: " + (data.msg || "알 수 없는 오류"));
+          }
+        })
+        .catch(err => console.error("후원 삭제 오류:", err));
+    }
+  };
+
+  // 🔹 메뉴 관련 핸들러
   const handleMenuOpen = (event) => setAnchorEl(event.currentTarget);
   const handleMenuClose = () => setAnchorEl(null);
+  const handleProfileClick = () => { navigate('/MyPage'); handleMenuClose(); };
+  const handleLogout = () => { localStorage.removeItem("token"); navigate('/'); handleMenuClose(); };
 
   return (
     <Box sx={{ flexGrow: 1, backgroundColor: "#f0f2f5", minHeight: "100vh" }}>
-      {/* --------------------------------------------------
-          상단바 (기존 디자인 절대 변경 없음)
-      -------------------------------------------------- */}
       <AppBar position="fixed" sx={{ zIndex: 1300, backgroundColor: "white" }}>
         <Toolbar sx={{ display: "flex", justifyContent: "space-between" }}>
           <Box sx={{ display: "flex", alignItems: "center" }}>
@@ -188,60 +201,49 @@ function Donations() {
             </Typography>
           </Box>
 
+          {/* 🔹 우측 프로필 메뉴 */}
           <Box>
-            <IconButton><ChatBubbleOutlineIcon /></IconButton>
-            <IconButton onClick={() => navigate('/feed')}><HomeIcon /></IconButton>
-            <IconButton><NotificationsNoneIcon /></IconButton>
+            <Avatar
+              src={decode?.profile_img ? `http://localhost:3010${decode.profile_img}` : USER_PROFILE_SRC}
+              sx={{ width: 40, height: 40 }}
+              onClick={handleMenuOpen}
+              style={{ cursor: "pointer" }}
+            />
+            <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleMenuClose}>
+              <MenuItem onClick={handleProfileClick}>마이페이지</MenuItem>
+              <Divider />
+              <MenuItem onClick={handleLogout}>로그아웃</MenuItem>
+            </Menu>
           </Box>
-
-          <Avatar src={profileImage} sx={{ width: 40, height: 40 }} onClick={handleMenuOpen} />
-
-          <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleMenuClose}>
-            <MenuItem onClick={() => navigate('/MyPage')}>마이페이지</MenuItem>
-            <Divider />
-            <MenuItem onClick={() => { localStorage.removeItem("token"); navigate('/'); }}>
-              로그아웃
-            </MenuItem>
-          </Menu>
         </Toolbar>
       </AppBar>
 
-      {/* --------------------------------------------------
-          메인 콘텐츠 (CSS 변경 없음)
-      -------------------------------------------------- */}
-
       <Box component="main" sx={{ marginTop: "80px", width: "100%", textAlign: "center" }}>
-
-        {/* 🔥 후원하기 버튼 추가 - UI 변경 없음 */}
-        <Button
-          variant="contained"
-          color="primary"
-          sx={{ mb: 3 }}
-          onClick={handleOpenDonate}
-        >
+        <Button variant="contained" color="primary" sx={{ mb: 3 }} onClick={handleOpenDonate}>
           후원하기
         </Button>
 
         <Container maxWidth="sm">
           {donations.length > 0 ? (
-            <Grid2 container spacing={3}>
+            <Box>
               {donations.map(donation => (
-                <Grid2 item xs={12} key={donation.donation_id}>
-                  <DonationCard donation={donation} onClick={handleOpenDetail} />
-                </Grid2>
+                <DonationCard
+                  key={donation.donation_id}
+                  donation={donation}
+                  onClick={handleOpenDetail}
+                  onEdit={handleEditDonation}
+                  onDelete={handleDeleteDonation}
+                  canEdit={String(donation.user_id) === String(userId)}
+                />
               ))}
-            </Grid2>
-          ) : (
-            <Box sx={{ mt: 5 }}>
-              <Typography>등록된 후원 내역이 없습니다.</Typography>
             </Box>
+          ) : (
+            <Typography>등록된 후원 내역이 없습니다.</Typography>
           )}
         </Container>
       </Box>
 
-      {/* --------------------------------------------------
-          상세보기 모달 (기존 UI 그대로 유지)
-      -------------------------------------------------- */}
+      {/* 후원 상세 모달 */}
       <Dialog open={openDetail} onClose={handleCloseDetail} fullWidth maxWidth="md">
         <DialogTitle>
           후원 상세정보
@@ -249,7 +251,6 @@ function Donations() {
             <CloseIcon />
           </IconButton>
         </DialogTitle>
-
         <DialogContent>
           {selectedDonation && (
             <>
@@ -260,18 +261,15 @@ function Donations() {
             </>
           )}
         </DialogContent>
-
         <DialogActions>
           <Button onClick={handleCloseDetail}>닫기</Button>
         </DialogActions>
       </Dialog>
 
-      {/* --------------------------------------------------
-          후원 입력 모달 (기능만 추가, CSS 변경 X)
-      -------------------------------------------------- */}
+      {/* 후원하기/수정 모달 */}
       <Dialog open={openDonate} onClose={handleCloseDonate} fullWidth maxWidth="sm">
         <DialogTitle>
-          후원하기
+          {editingDonation ? "후원 수정" : "후원하기"}
           <IconButton sx={{ position: "absolute", right: 8, top: 8 }} onClick={handleCloseDonate}>
             <CloseIcon />
           </IconButton>
@@ -298,7 +296,7 @@ function Donations() {
         </DialogContent>
 
         <DialogActions>
-          <Button variant="contained" onClick={handleDonate}>후원하기</Button>
+          <Button variant="contained" onClick={handleDonate}>{editingDonation ? "수정하기" : "후원하기"}</Button>
           <Button onClick={handleCloseDonate}>취소</Button>
         </DialogActions>
       </Dialog>
