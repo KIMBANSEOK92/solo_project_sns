@@ -32,7 +32,7 @@ function App() {
           <Route path="/register" element={<Register />} />
           <Route path="/mypage" element={<MyPage />} />
           <Route path="/donations" element={<Donations />} />
-          <Route path="/childAbuseReports" element={<ChildAbuseReports />} />
+          <Route path="/childAbuseReports/:regionName?" element={<ChildAbuseReports />} />
           <Route path="/friends" element={<Friends />} />
 
           {/* 🔥 필수: /mui 오류 해결 라우트 */}

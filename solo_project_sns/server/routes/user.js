@@ -276,6 +276,83 @@ router.post("/reset-password", async (req, res) => {
   }
 });
 
+// ======================================================
+// 마이페이지용 전체 정보 조회 
+// ======================================================
+router.get("/:userId/profile", async (req, res) => {
+  const { userId } = req.params;
+
+  try {
+    // 유저 정보 조회
+    const [userRows] = await db.query(
+      `SELECT 
+          user_id AS userId,
+          username AS userName,
+          email,
+          region,
+          intro,
+          profile_img AS profileImage 
+       FROM Users 
+       WHERE user_id = ?`,
+      [userId]
+    );
+
+    if (userRows.length === 0) {
+      return res.status(404).json({ result: false, msg: "사용자를 찾을 수 없습니다." });
+    }
+
+    const user = userRows[0];
+
+    // 피드 조회
+    const [feeds] = await db.query(
+      `SELECT post_id, content, created_at 
+       FROM Feed 
+       WHERE user_id = ?
+       ORDER BY created_at DESC`,
+      [userId]
+    );
+
+    // 친구 목록 조회
+    const [friends] = await db.query(
+      `SELECT relation_id, requester_id, receiver_id, status 
+       FROM Friends 
+       WHERE requester_id = ? OR receiver_id = ?`,
+      [userId, userId]
+    );
+
+    // 후원 내역 조회
+    const [donations] = await db.query(
+      `SELECT donation_id, amount, message, created_at 
+       FROM Donations 
+       WHERE user_id = ?
+       ORDER BY created_at DESC`,
+      [userId]
+    );
+
+    // 신고 내역 조회
+    const [reports] = await db.query(
+      `SELECT report_id, title, description, status, reported_at 
+       FROM Reports 
+       WHERE user_id = ?
+       ORDER BY reported_at DESC`,
+      [userId]
+    );
+
+    return res.json({
+      result: true,
+      user,
+      feeds,
+      friends,
+      donations,
+      reports,
+    });
+
+  } catch (error) {
+    console.error("Profile API Error:", error);
+    res.status(500).json({ result: false, msg: "서버 오류 발생" });
+  }
+});
+
 
 
 module.exports = router;

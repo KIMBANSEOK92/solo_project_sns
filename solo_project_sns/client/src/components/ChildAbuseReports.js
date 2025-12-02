@@ -14,9 +14,6 @@ import {
   IconButton,
   DialogActions,
   Button,
-  List,
-  ListItem,
-  ListItemText,
   Avatar,
   Grid2,
   Menu,
@@ -34,7 +31,7 @@ import HomeIcon from '@mui/icons-material/Home';
 import NotificationsNoneIcon from '@mui/icons-material/NotificationsNone';
 import AddIcon from '@mui/icons-material/Add';
 import { jwtDecode } from "jwt-decode";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 
 const USER_PROFILE_SRC = "/mr_kim_profile.jpg";
 
@@ -62,6 +59,11 @@ const AbuseReportCard = memo(({ report, onClick }) => (
       <Typography variant="h6" sx={{ fontWeight: "bold" }}>
         {report.title}
       </Typography>
+      {report.region_name && (
+        <Typography variant="body2" color="primary" sx={{ fontWeight: "medium", mt: 0.5 }}>
+          지역: {report.region_name}
+        </Typography>
+      )}
       <Typography variant="body2" color="textSecondary">
         상태: {report.status}
       </Typography>
@@ -80,23 +82,22 @@ const AbuseReportCard = memo(({ report, onClick }) => (
 
 function ChildAbuseReports() {
   const [reports, setReports] = useState([]);
-  const [regions, setRegions] = useState([]);
   const [selectedReport, setSelectedReport] = useState(null);
   const [open, setOpen] = useState(false);
   const [addReportOpen, setAddReportOpen] = useState(false); // 신고 등록 폼 열기
   const [newReport, setNewReport] = useState({
-    region_id: "",
+    region_name: "", // region_id 대신 region_name 사용 (사용자가 직접 입력)
     title: "",
     description: "",
     status: "확인 중",
     image: null,
   });
-  const [loadingRegions, setLoadingRegions] = useState(false); // 지역 로딩 상태 관리
 
   // 수정: 프로필 메뉴 상태 추가
   const [anchorEl, setAnchorEl] = useState(null);
 
   const navigate = useNavigate();
+  const { regionName } = useParams(); // URL 파라미터에서 지역명 가져오기
 
   const token = localStorage.getItem("token");
   const decode = token ? jwtDecode(token) : {};
@@ -105,56 +106,93 @@ function ChildAbuseReports() {
     ? `http://localhost:3010${decode.profileImage}`
     : USER_PROFILE_SRC;
 
-  // 지역 목록 조회
-  const loadRegions = useCallback(() => {
-    setLoadingRegions(true);
-    fetch("http://localhost:3010/regions")
-      .then((res) => {
-        if (!res.ok) throw new Error("지역 목록을 가져오는 데 실패했습니다.");
-        return res.json();
-      })
-      .then((data) => setRegions(data.list || []))
-      .catch((err) => { console.error(err); alert("서버에서 지역 목록을 가져오는 데 실패했습니다."); })
-      .finally(() => setLoadingRegions(false));
-  }, []);
-
+  // ============================================================
   // 아동 학대 신고 목록 조회
+  // ============================================================
+  // URL 파라미터로 받은 regionName으로 해당 지역의 신고만 조회합니다.
+  // regionName이 없으면 전체 신고를 조회합니다.
+  // ============================================================
   const loadReports = useCallback(() => {
-    fetch("http://localhost:3010/reports")
+    let url = "http://localhost:3010/reports";
+
+    // URL 파라미터에서 지역명이 있으면 해당 지역으로 필터링
+    if (regionName) {
+      url += `?region_name=${encodeURIComponent(regionName)}`;
+    }
+
+    fetch(url)
       .then((res) => {
         if (!res.ok) throw new Error("신고 목록을 가져오는 데 실패했습니다.");
         return res.json();
       })
       .then((data) => setReports(data.list || []))
-      .catch((err) => { console.error(err); alert("서버에서 아동 학대 신고 목록을 가져오는 데 실패했습니다."); });
-  }, []);
+      .catch((err) => {
+        console.error(err);
+        alert("서버에서 아동 학대 신고 목록을 가져오는 데 실패했습니다.");
+      });
+  }, [regionName]); // regionName이 변경될 때마다 다시 로드
 
   useEffect(() => {
-    loadRegions();
     loadReports();
-  }, [loadRegions, loadReports]);
+  }, [loadReports]);
 
   const handleOpenModal = (report) => { setSelectedReport(report); setOpen(true); };
   const handleCloseModal = () => { setOpen(false); setSelectedReport(null); };
 
+  // ============================================================
+  // 아동 학대 신고 등록 처리 함수
+  // ============================================================
+  // 사용자가 입력한 지역명(region_name)과 함께 신고 정보를 서버로 전송하여 DB에 저장합니다.
+  // 서버에서 입력한 지역명이 regions 테이블에 없으면 자동으로 추가합니다.
+  // ============================================================
   const handleAddReportSubmit = () => {
+    // 필수 필드 검증
+    if (!newReport.region_name || !newReport.region_name.trim()) {
+      alert("지역을 입력해주세요.");
+      return;
+    }
+    if (!newReport.title || !newReport.title.trim()) {
+      alert("제목을 입력해주세요.");
+      return;
+    }
+    if (!newReport.description || !newReport.description.trim()) {
+      alert("상세 내용을 입력해주세요.");
+      return;
+    }
+
+    // FormData 생성 (이미지 파일 전송을 위해 사용)
     const formData = new FormData();
-    formData.append("region_id", newReport.region_id);
-    formData.append("title", newReport.title);
-    formData.append("description", newReport.description);
-    formData.append("status", newReport.status);
+    formData.append("region_name", newReport.region_name.trim()); // region_id 대신 region_name 전송
+    formData.append("title", newReport.title.trim());
+    formData.append("description", newReport.description.trim());
+    formData.append("status", newReport.status || "확인 중");
     if (newReport.image) formData.append("image", newReport.image);
 
+    // 서버로 신고 등록 요청 전송
     fetch("http://localhost:3010/reports/add", { method: "POST", body: formData })
       .then((res) => res.json())
       .then((data) => {
         if (data.result) {
           alert("아동 학대 신고가 완료되었습니다.");
+          // 폼 초기화
+          setNewReport({
+            region_name: "",
+            title: "",
+            description: "",
+            status: "확인 중",
+            image: null,
+          });
           setAddReportOpen(false);
-          loadReports(); // 신고 목록 새로 고침
-        } else alert("신고 등록에 실패하였습니다.");
+          // 신고 목록 새로고침 (현재 URL의 지역으로)
+          loadReports();
+        } else {
+          alert(data.msg || "신고 등록에 실패하였습니다.");
+        }
       })
-      .catch((err) => { console.error(err); alert("서버와의 연결에 실패했습니다."); });
+      .catch((err) => {
+        console.error("신고 등록 에러:", err);
+        alert("서버와의 연결에 실패했습니다. 다시 시도해주세요.");
+      });
   };
 
   // 수정: 프로필 메뉴 열기/닫기 및 액션
@@ -196,6 +234,14 @@ function ChildAbuseReports() {
       {/* 콘텐츠 영역 */}
       <Box component="main" sx={{ marginTop: "64px", width: "100%", display: "flex", justifyContent: "center", pt: 4 }}>
         <Container maxWidth="sm">
+          {/* 현재 선택된 지역 표시 */}
+          {regionName && (
+            <Box sx={{ mb: 3, textAlign: "center" }}>
+              <Typography variant="h5" sx={{ fontWeight: "bold", color: "#1877f2" }}>
+                {regionName} 지역 신고 목록
+              </Typography>
+            </Box>
+          )}
           {reports.length > 0 ? (
             <Grid2 container spacing={3}>
               {reports.map((report) => (
@@ -206,7 +252,11 @@ function ChildAbuseReports() {
             </Grid2>
           ) : (
             <Box sx={{ textAlign: "center", mt: 5 }}>
-              <Typography>등록된 아동 학대 사례가 없습니다.</Typography>
+              <Typography>
+                {regionName
+                  ? `${regionName} 지역에 등록된 아동 학대 사례가 없습니다.`
+                  : "등록된 아동 학대 사례가 없습니다."}
+              </Typography>
             </Box>
           )}
 
@@ -216,52 +266,70 @@ function ChildAbuseReports() {
               아동 학대 신고
             </Button>
           </Box>
-
-          {/* 신고 등록 폼 */}
-          <Dialog open={addReportOpen} onClose={() => setAddReportOpen(false)}>
-            <DialogTitle>아동 학대 신고 등록</DialogTitle>
-            <DialogContent>
-              <FormControl fullWidth sx={{ mb: 2 }}>
-                <InputLabel>지역</InputLabel>
-                <Select
-                  value={newReport.region_id}
-                  onChange={(e) => setNewReport({ ...newReport, region_id: e.target.value })}
-                  label="지역"
-                  disabled={loadingRegions}
-                >
-                  {loadingRegions ? (
-                    <MuiMenuItem value=""><em>로딩 중...</em></MuiMenuItem>
-                  ) : (
-                    regions.length > 0 ? (
-                      regions.map((region) => (
-                        <MuiMenuItem key={region.region_id} value={region.region_id}>{region.region_name}</MuiMenuItem>
-                      ))
-                    ) : (
-                      <MuiMenuItem value=""><em>지역 정보가 없습니다.</em></MuiMenuItem>
-                    )
-                  )}
-                </Select>
-              </FormControl>
-
-              <TextField label="제목" fullWidth value={newReport.title} onChange={(e) => setNewReport({ ...newReport, title: e.target.value })} sx={{ mb: 2 }} />
-              <TextField label="상세 내용" fullWidth multiline rows={4} value={newReport.description} onChange={(e) => setNewReport({ ...newReport, description: e.target.value })} sx={{ mb: 2 }} />
-              <FormControl fullWidth sx={{ mb: 2 }}>
-                <InputLabel>상태</InputLabel>
-                <Select value={newReport.status} onChange={(e) => setNewReport({ ...newReport, status: e.target.value })} label="상태">
-                  <MuiMenuItem value="확인 중">확인 중</MuiMenuItem>
-                  <MuiMenuItem value="조치 완료">조치 완료</MuiMenuItem>
-                  <MuiMenuItem value="의심 단계">의심 단계</MuiMenuItem>
-                </Select>
-              </FormControl>
-              <TextField type="file" fullWidth onChange={(e) => setNewReport({ ...newReport, image: e.target.files[0] })} sx={{ mb: 2 }} />
-            </DialogContent>
-            <DialogActions>
-              <Button onClick={() => setAddReportOpen(false)}>취소</Button>
-              <Button onClick={handleAddReportSubmit} variant="contained">등록</Button>
-            </DialogActions>
-          </Dialog>
         </Container>
       </Box>
+
+      {/* 신고 등록 폼 */}
+      <Dialog open={addReportOpen} onClose={() => setAddReportOpen(false)} fullWidth maxWidth="sm">
+        <DialogTitle>아동 학대 신고 등록</DialogTitle>
+        <DialogContent>
+          {/* 지역 입력 필드 */}
+          {/* 사용자가 직접 지역명을 입력합니다. 서버에서 자동으로 regions 테이블에 추가됩니다. */}
+          <TextField
+            label="지역 *"
+            fullWidth
+            value={newReport.region_name}
+            onChange={(e) => setNewReport({ ...newReport, region_name: e.target.value })}
+            sx={{ mb: 2 }}
+            placeholder="예: 서울, 부산, 인천 등(경기도/경상도/전라도 등 도 X)"
+            required
+          />
+
+          {/* 제목 입력 */}
+          <TextField
+            label="제목 *"
+            fullWidth
+            value={newReport.title}
+            onChange={(e) => setNewReport({ ...newReport, title: e.target.value })}
+            sx={{ mb: 2 }}
+            required
+          />
+          {/* 상세 내용 입력 */}
+          <TextField
+            label="상세 내용 *"
+            fullWidth
+            multiline
+            rows={4}
+            value={newReport.description}
+            onChange={(e) => setNewReport({ ...newReport, description: e.target.value })}
+            sx={{ mb: 2 }}
+            required
+          />
+          <FormControl fullWidth sx={{ mb: 2 }}>
+            <InputLabel>상태</InputLabel>
+            <Select value={newReport.status} onChange={(e) => setNewReport({ ...newReport, status: e.target.value })} label="상태">
+              <MuiMenuItem value="확인 중">확인 중</MuiMenuItem>
+              <MuiMenuItem value="조치 완료">조치 완료</MuiMenuItem>
+              <MuiMenuItem value="의심 단계">의심 단계</MuiMenuItem>
+            </Select>
+          </FormControl>
+          <TextField type="file" fullWidth onChange={(e) => setNewReport({ ...newReport, image: e.target.files[0] })} sx={{ mb: 2 }} />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => {
+            // 폼 닫기 시 초기화
+            setNewReport({
+              region_name: "",
+              title: "",
+              description: "",
+              status: "확인 중",
+              image: null,
+            });
+            setAddReportOpen(false);
+          }}>취소</Button>
+          <Button onClick={handleAddReportSubmit} variant="contained" color="primary">등록</Button>
+        </DialogActions>
+      </Dialog>
 
       {/* 상세 모달 */}
       <Dialog open={open} onClose={handleCloseModal} fullWidth maxWidth="lg">
@@ -277,6 +345,11 @@ function ChildAbuseReports() {
               <img src={selectedReport.image_url} alt="report" style={{ width: "100%", borderRadius: "6px" }} />
             )}
             <Typography variant="h6" sx={{ mt: 2 }}>기본 정보</Typography>
+            {selectedReport?.region_name && (
+              <Typography sx={{ mb: 1 }}>
+                <strong>지역:</strong> {selectedReport.region_name}
+              </Typography>
+            )}
             <Typography>제목: {selectedReport?.title}</Typography>
             <Typography>상태: {selectedReport?.status}</Typography>
             <Typography>보고일: {selectedReport?.reported_at}</Typography>

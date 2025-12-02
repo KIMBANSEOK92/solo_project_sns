@@ -80,6 +80,7 @@ function Friends() {
                 headers: { "Authorization": `Bearer ${token}` }
             });
 
+            
             if (!response.ok) {
                 console.error("친구 상태 API 오류:", response.status);
                 userList.forEach(user => { statuses[user.user_id] = { status: 'none' } });
@@ -256,7 +257,7 @@ function Friends() {
                             ))}
                         </Grid2>
                     ) : (
-                        <Box sx={{ textAlign: 'center', mt: 5 }}>
+                        <Box sx={{ textAlign: 'center', mt: 6 }}>
                             <Typography variant="h6">등록된 유저가 없거나 불러올 수 없습니다.</Typography>
                             <Button onClick={fnUsers} sx={{ mt: 2 }}>다시 로드하기</Button>
                         </Box>

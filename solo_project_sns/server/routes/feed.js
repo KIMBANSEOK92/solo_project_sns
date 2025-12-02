@@ -81,48 +81,116 @@ router.get("/", async (req, res) => {
 // ----------------------------------------
 // 3. 피드 삭제 (작성자만 가능)
 // ----------------------------------------
+// 트랜잭션을 사용하여 데이터 일관성을 보장하고,
+// 외래키 제약조건(ON DELETE CASCADE)으로 인해 관련 데이터가 자동 삭제됩니다.
+// ----------------------------------------
 router.delete("/:postId", async (req, res) => {
     const { postId } = req.params;
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
 
+    // 인증 토큰 확인
     if (!token) {
         return res.status(401).json({ result: false, msg: "로그인이 필요합니다." });
     }
+
+    // 트랜잭션을 위한 connection 변수 (에러 처리 시 롤백을 위해 함수 스코프 밖에 선언)
+    let connection = null;
 
     try {
         const jwt = require('jsonwebtoken');
         const decoded = jwt.verify(token, 'server_secret_key');
         const userId = decoded.userId;
 
-        // 게시물 작성자 확인
-        const [feedRows] = await db.query("SELECT user_id, image_url FROM feed WHERE post_id = ?", [postId]);
+        // 데이터베이스 연결 가져오기 (트랜잭션을 위해 pool에서 connection 가져옴)
+        connection = await db.getConnection();
+
+        // 트랜잭션 시작
+        await connection.beginTransaction();
+
+        // 1단계: 게시물 존재 여부 및 작성자 확인
+        const [feedRows] = await connection.query(
+            "SELECT user_id, image_url FROM feed WHERE post_id = ?",
+            [postId]
+        );
 
         if (feedRows.length === 0) {
+            // 트랜잭션 롤백 (변경사항 없지만 명시적으로 처리)
+            await connection.rollback();
+            connection.release();
             return res.status(404).json({ result: false, msg: "게시물을 찾을 수 없습니다." });
         }
 
+        // 2단계: 작성자 권한 확인
         if (feedRows[0].user_id !== userId) {
+            // 트랜잭션 롤백
+            await connection.rollback();
+            connection.release();
             return res.status(403).json({ result: false, msg: "본인이 작성한 게시물만 삭제할 수 있습니다." });
         }
 
-        // 이미지 파일 삭제
+        // 3단계: 관련 데이터 삭제 (외래키 CASCADE가 설정되면 자동으로 삭제되지만,
+        // 명시적으로 삭제하여 코드의 의도를 명확히 함)
+        // ON DELETE CASCADE가 적용되어 있으면 이 부분은 선택적입니다.
+        await connection.query("DELETE FROM feed_likes WHERE post_id = ?", [postId]);
+        await connection.query("DELETE FROM feed_comments WHERE post_id = ?", [postId]);
+
+        // 4단계: 게시물 삭제
+        // 외래키 제약조건(ON DELETE CASCADE)에 의해 관련 댓글과 좋아요가 자동으로 삭제됩니다.
+        await connection.query("DELETE FROM feed WHERE post_id = ?", [postId]);
+
+        // 트랜잭션 커밋 (모든 작업이 성공적으로 완료됨)
+        await connection.commit();
+
+        // 5단계: 이미지 파일 삭제 (데이터베이스 작업 완료 후 파일 시스템 작업)
+        // 트랜잭션 커밋 후에 파일을 삭제하는 이유:
+        // - 파일 시스템 작업은 트랜잭션에 포함되지 않음
+        // - 데이터베이스 작업이 성공한 후에만 파일을 삭제하여 일관성 유지
         if (feedRows[0].image_url) {
-            const filePath = path.join(uploadDir, path.basename(feedRows[0].image_url));
-            if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+            try {
+                const filePath = path.join(uploadDir, path.basename(feedRows[0].image_url));
+                if (fs.existsSync(filePath)) {
+                    fs.unlinkSync(filePath);
+                }
+            } catch (fileErr) {
+                // 파일 삭제 실패는 로그만 남기고 응답은 성공으로 처리
+                // (데이터베이스 삭제는 이미 완료되었으므로)
+                console.error("이미지 파일 삭제 실패:", fileErr);
+            }
         }
 
-        // 관련 좋아요, 댓글도 삭제
-        await db.query("DELETE FROM feed_likes WHERE post_id = ?", [postId]);
-        await db.query("DELETE FROM feed_comments WHERE post_id = ?", [postId]);
-
-        // 게시물 삭제
-        await db.query("DELETE FROM feed WHERE post_id = ?", [postId]);
+        // 연결 반환
+        connection.release();
 
         res.json({ result: true, msg: "삭제되었습니다!" });
+
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ result: false, msg: "삭제 중 오류 발생" });
+        // 에러 발생 시 트랜잭션 롤백
+        if (connection) {
+            try {
+                await connection.rollback();
+                connection.release();
+            } catch (rollbackErr) {
+                console.error("트랜잭션 롤백 실패:", rollbackErr);
+            }
+        }
+
+        console.error("게시물 삭제 중 오류 발생:", err);
+
+        // JWT 토큰 에러 처리
+        if (err.name === 'JsonWebTokenError' || err.name === 'TokenExpiredError') {
+            return res.status(401).json({ result: false, msg: "유효하지 않은 토큰입니다." });
+        }
+
+        // 외래키 제약조건 에러 처리 (CASCADE가 제대로 설정되지 않은 경우)
+        if (err.code === 'ER_ROW_IS_REFERENCED_2' || err.code === '1451') {
+            return res.status(500).json({
+                result: false,
+                msg: "게시물 삭제 실패: 관련 데이터가 있습니다. 외래키 제약조건을 확인해주세요."
+            });
+        }
+
+        res.status(500).json({ result: false, msg: "삭제 중 오류 발생: " + err.message });
     }
 });
 

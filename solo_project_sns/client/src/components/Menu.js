@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Drawer,
   List,
@@ -24,41 +24,99 @@ import {
 import { Link, useLocation } from 'react-router-dom';
 import { jwtDecode } from 'jwt-decode';
 
-const AREA_LIST = [
-  { name: '서울특별시', emoji: '🐱‍🚀' },
-  { name: '인천광역시', emoji: '🙈' },
-  { name: '부산광역시', emoji: '🐶' },
-  { name: '대구광역시', emoji: '🐺' },
-  { name: '대전광역시', emoji: '🐱' },
-  { name: '광주광역시', emoji: '🐯' },
-  { name: '울산광역시', emoji: '🦒' },
-  { name: '용인시', emoji: '🦊' },
-  { name: '창원시', emoji: '🦝' },
-  { name: '수원시', emoji: '🐮' },
-  { name: '화성시', emoji: '🐷' },
-  { name: '성남시', emoji: '🐗' },
-  { name: '고양시', emoji: '🐭' },
-  { name: '부천시', emoji: '🐹' },
-  { name: '남양주시', emoji: '🐰' },
-  { name: '전주시', emoji: '🐻' },
-  { name: '천안시', emoji: '🐨' },
-  { name: '안산시', emoji: '🐸' },
-  { name: '평택시', emoji: '🦓' },
-  { name: '청주시', emoji: '🦄' },
-  { name: '김해시', emoji: '🐔' },
-  { name: '시흥시', emoji: '🐲' },
-  { name: '포항시', emoji: '🦍' },
-  { name: '파주시', emoji: '🐪' },
-  { name: '제주시', emoji: '🦉' },
-  { name: '광주시', emoji: '🐧' },
-  { name: '구미시', emoji: '🐢' },
-  { name: '아산시', emoji: '🐱‍👤' },
-  { name: '의정부시', emoji: '🐇' },
-];
+// ============================================================
+// 지역명에서 키워드 추출 함수
+// ============================================================
+// "인천광역시" → "인천", "서울특별시" → "서울", "용인시" → "용인"
+// 중복된 지역명(예: "인천"과 "인천광역시")을 하나로 그룹화하기 위해 사용
+// ============================================================
+const extractRegionKeyword = (regionName) => {
+  if (!regionName) return "";
+  
+  // "XX특별시", "XX광역시", "XX시" 등에서 키워드 추출
+  const patterns = [
+    /^(.+?)특별시/,  // 서울특별시 → 서울
+    /^(.+?)광역시/,  // 인천광역시 → 인천
+    /^(.+?)시$/,     // 용인시 → 용인
+    /^(.+?)도$/,     // 경기도 → 경기
+    /^(.+?)군$/,     // 양평군 → 양평
+  ];
+  
+  for (const pattern of patterns) {
+    const match = regionName.match(pattern);
+    if (match && match[1]) {
+      return match[1].trim();
+    }
+  }
+  
+  // 패턴에 매치되지 않으면 원본 반환
+  return regionName.trim();
+};
 
 function Menu() {
   const [openChildSearch, setOpenChildSearch] = useState(false);
+  const [regions, setRegions] = useState([]); // DB에서 가져온 지역 목록 (키워드로 그룹화됨)
   const location = useLocation();
+
+  // ============================================================
+  // DB에서 지역 목록 조회 및 키워드로 그룹화
+  // ============================================================
+  // regions 테이블에서 지역 목록을 가져와서 키워드로 그룹화합니다.
+  // 같은 키워드의 지역은 하나로 표시 (예: "인천"과 "인천광역시" → "인천" 하나만 표시)
+  // ============================================================
+  const loadRegions = useCallback(() => {
+    fetch("http://localhost:3010/regions")
+      .then((res) => {
+        if (!res.ok) throw new Error("지역 목록을 가져오는 데 실패했습니다.");
+        return res.json();
+      })
+      .then((data) => {
+        const regionsList = data.list || [];
+        
+        // 키워드로 그룹화: 같은 키워드를 가진 지역 중 가장 짧은 이름을 대표로 사용
+        // 예: "인천"과 "인천광역시" → 키워드 "인천" 하나로 그룹화
+        const keywordMap = new Map();
+        
+        regionsList.forEach((region) => {
+          const keyword = extractRegionKeyword(region.region_name);
+          
+          // 키워드를 추출할 수 없으면 원본 지역명을 키워드로 사용
+          const finalKeyword = keyword || region.region_name;
+          
+          // 이미 같은 키워드가 있으면, 이름이 더 짧은 것을 대표로 선택
+          if (keywordMap.has(finalKeyword)) {
+            const existing = keywordMap.get(finalKeyword);
+            if (region.region_name.length < existing.original_name.length) {
+              keywordMap.set(finalKeyword, {
+                ...region,
+                keyword: finalKeyword,
+                original_name: region.region_name
+              });
+            }
+          } else {
+            keywordMap.set(finalKeyword, {
+              ...region,
+              keyword: finalKeyword,
+              original_name: region.region_name
+            });
+          }
+        });
+        
+        // Map을 배열로 변환하여 키워드 이름으로 정렬
+        const groupedRegions = Array.from(keywordMap.values());
+        groupedRegions.sort((a, b) => a.keyword.localeCompare(b.keyword, 'ko'));
+        
+        setRegions(groupedRegions);
+      })
+      .catch((err) => {
+        console.error("지역 목록 조회 에러:", err);
+        // 에러가 발생해도 메뉴는 계속 표시
+      });
+  }, []);
+
+  useEffect(() => {
+    loadRegions();
+  }, [loadRegions]);
 
   const handleClickChildSearch = () => {
     setOpenChildSearch(!openChildSearch);
@@ -144,21 +202,37 @@ function Menu() {
 
             <Divider light />
 
-            {AREA_LIST.map((area, index) => (
-              <ListItem
-                button
-                key={index}
-                component={Link}
-                to={`/childAbuseReports/${area.name}`}
-                selected={location.pathname === `/childAbuseReports/${area.name}`}
-                sx={{ py: 1 }}
-              >
+            {/* DB에서 가져온 지역 목록 표시 (키워드로 그룹화됨) */}
+            {/* 예: "인천"과 "인천광역시" → "인천" 하나만 표시, 클릭 시 둘 다 포함된 결과 조회 */}
+            {regions.length > 0 ? (
+              regions.map((region) => {
+                // 키워드로 메뉴에 표시하고, 검색 시에도 키워드로 검색
+                const keyword = region.keyword || extractRegionKeyword(region.region_name) || region.region_name;
+                
+                return (
+                  <ListItem
+                    button
+                    key={region.region_id}
+                    component={Link}
+                    to={`/childAbuseReports/${encodeURIComponent(keyword)}`}
+                    selected={location.pathname === `/childAbuseReports/${encodeURIComponent(keyword)}`}
+                    sx={{ py: 1 }}
+                  >
+                    <ListItemText
+                      primary={keyword}
+                      primaryTypographyProps={{ fontSize: '14px', ml: 4 }}
+                    />
+                  </ListItem>
+                );
+              })
+            ) : (
+              <ListItem sx={{ py: 1 }}>
                 <ListItemText
-                  primary={`${area.emoji} ${area.name}`}
-                  primaryTypographyProps={{ fontSize: '14px', ml: 4 }}
+                  primary="지역 정보 로딩 중..."
+                  primaryTypographyProps={{ fontSize: '14px', ml: 4, color: 'textSecondary' }}
                 />
               </ListItem>
-            ))}
+            )}
           </List>
         </Collapse>
 
