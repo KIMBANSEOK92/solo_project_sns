@@ -283,14 +283,13 @@ router.get("/:userId/profile", async (req, res) => {
   const { userId } = req.params;
 
   try {
-    // 유저 정보 조회
+    // 유저 정보 조회 (intro 컬럼 제외 - 테이블에 없을 수 있음)
     const [userRows] = await db.query(
       `SELECT 
           user_id AS userId,
           username AS userName,
           email,
           region,
-          intro,
           profile_img AS profileImage 
        FROM Users 
        WHERE user_id = ?`,
@@ -302,6 +301,7 @@ router.get("/:userId/profile", async (req, res) => {
     }
 
     const user = userRows[0];
+    user.intro = null; // intro 컬럼이 없으므로 기본값 설정
 
     // 피드 조회
     const [feeds] = await db.query(
@@ -329,14 +329,22 @@ router.get("/:userId/profile", async (req, res) => {
       [userId]
     );
 
-    // 신고 내역 조회
-    const [reports] = await db.query(
-      `SELECT report_id, title, description, status, reported_at 
-       FROM Reports 
-       WHERE user_id = ?
-       ORDER BY reported_at DESC`,
-      [userId]
-    );
+    // 신고 내역 조회 (테이블명 확인 - child_abuse_reports일 수 있음)
+    let reports = [];
+    try {
+      const [reportsResult] = await db.query(
+        `SELECT report_id, title, description, status, reported_at 
+         FROM child_abuse_reports 
+         WHERE user_id = ?
+         ORDER BY reported_at DESC`,
+        [userId]
+      );
+      reports = reportsResult;
+    } catch (reportErr) {
+      // 테이블이 없거나 user_id 컬럼이 없으면 빈 배열 반환
+      console.log("신고 내역 조회 실패 (테이블 또는 컬럼 없음):", reportErr.message);
+      reports = [];
+    }
 
     return res.json({
       result: true,

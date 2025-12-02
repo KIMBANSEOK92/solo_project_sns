@@ -8,6 +8,7 @@ const donationRouter = require("./routes/donations"); // ← 파일 이름 정�
 const childAbuseReportsRouter = require("./routes/childAbuseReports"); // 아동 학대 신고 라우터
 const friendsRouter = require("./routes/friends"); // 친구 라우터
 const notificationsRouter = require("./routes/notifications"); // 알림 라우터
+const messagesRouter = require("./routes/messages"); // 메시지 라우터
 
 const app = express();
 
@@ -25,6 +26,7 @@ app.use("/donation", donationRouter); // ← 클라이언트 URL과 맞춤
 app.use("/", childAbuseReportsRouter); // 아동 학대 신고 라우터 (/, /reports, /regions 경로 사용)
 app.use("/friends", friendsRouter); // 친구 라우터
 app.use("/notifications", notificationsRouter); // 알림 라우터
+app.use("/messages", messagesRouter); // 메시지 라우터
 
 app.listen(3010, () => {
     console.log("server start!");

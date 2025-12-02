@@ -3,6 +3,30 @@ const router = express.Router();
 const db = require("../db"); // 데이터베이스 연결 모듈
 const { v4: uuidv4 } = require("uuid"); // relation_id 생성을 위해 uuid 모듈 사용
 
+// Friends 테이블 자동 생성 함수
+const ensureFriendsTable = async () => {
+    try {
+        await db.query("SELECT 1 FROM friends LIMIT 1");
+    } catch (tableErr) {
+        if (tableErr.code === 'ER_NO_SUCH_TABLE') {
+            await db.query(`
+                CREATE TABLE IF NOT EXISTS friends (
+                    relation_id VARCHAR(255) PRIMARY KEY,
+                    requester_id VARCHAR(255) NOT NULL,
+                    receiver_id VARCHAR(255) NOT NULL,
+                    status VARCHAR(50) DEFAULT 'pending',
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    INDEX idx_requester (requester_id),
+                    INDEX idx_receiver (receiver_id)
+                )
+            `);
+            console.log("friends 테이블 생성 완료");
+        } else {
+            throw tableErr;
+        }
+    }
+};
+
 // 알림 테이블 자동 생성 함수
 const ensureNotificationsTable = async () => {
     try {
@@ -33,6 +57,8 @@ const ensureNotificationsTable = async () => {
 // =======================================================
 router.get("/", async (req, res) => {
     try {
+        await ensureFriendsTable();
+        
         const [list] = await db.query(`
             SELECT 
                 relation_id,
@@ -59,6 +85,8 @@ router.get("/", async (req, res) => {
 router.get("/:userId", async (req, res) => {
     const { userId } = req.params;
     try {
+        await ensureFriendsTable();
+        
         const [list] = await db.query(`
             SELECT
                 f.relation_id,
@@ -103,6 +131,7 @@ router.post("/", async (req, res) => {
     }
 
     try {
+        await ensureFriendsTable();
         // 이미 친구/요청 상태인지 확인 (A->B 또는 B->A 모두 체크)
         const [exist] = await db.query(`
             SELECT status FROM friends
@@ -172,6 +201,7 @@ router.put("/accept", async (req, res) => {
     }
 
     try {
+        await ensureFriendsTable();
         // 먼저 친구 요청 정보 조회
         const [friendRequest] = await db.query(`
             SELECT requester_id, receiver_id, status
@@ -250,6 +280,7 @@ router.delete("/:relation_id", async (req, res) => {
     }
 
     try {
+        await ensureFriendsTable();
         const [result] = await db.query(`
             DELETE FROM friends
             WHERE relation_id = ?

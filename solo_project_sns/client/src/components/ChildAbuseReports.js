@@ -24,6 +24,11 @@ import {
   MenuItem as MuiMenuItem,
   InputLabel,
   FormControl,
+  Badge,
+  List,
+  ListItem,
+  ListItemAvatar,
+  ListItemText
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline';
@@ -89,6 +94,9 @@ function ChildAbuseReports() {
   const [editingReport, setEditingReport] = useState(null); // 수정 중인 신고
   const [currentUserId, setCurrentUserId] = useState(null); // 현재 로그인한 사용자 ID
   const [currentUserProfile, setCurrentUserProfile] = useState(null);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [notificationMenuOpen, setNotificationMenuOpen] = useState(false);
+  const [notifications, setNotifications] = useState([]);
   const [newReport, setNewReport] = useState({
     region_name: "", // region_id 대신 region_name 사용 (사용자가 직접 입력)
     title: "",
@@ -121,6 +129,18 @@ function ChildAbuseReports() {
             }
           })
           .catch(err => console.error("프로필 조회 실패:", err));
+
+        // 읽지 않은 알림 개수 조회
+        fetch("http://localhost:3010/notifications/unread-count", {
+          headers: { "Authorization": `Bearer ${token}` }
+        })
+          .then(res => res.json())
+          .then(data => {
+            if (data.result) {
+              setUnreadCount(data.count);
+            }
+          })
+          .catch(err => console.error("알림 개수 조회 실패:", err));
       } catch (err) {
         console.error("토큰 디코딩 실패:", err);
       }
@@ -159,6 +179,63 @@ function ChildAbuseReports() {
 
   const handleOpenModal = (report) => { setSelectedReport(report); setOpen(true); };
   const handleCloseModal = () => { setOpen(false); setSelectedReport(null); };
+
+  // 알림 목록 조회
+  const fetchNotifications = useCallback(async () => {
+    if (!token) return;
+
+    try {
+      const res = await fetch("http://localhost:3010/notifications", {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.result && data.list) {
+        setNotifications(data.list);
+      }
+    } catch (err) {
+      console.error("알림 조회 오류:", err);
+    }
+  }, [token]);
+
+  // 친구 요청 수락
+  const handleAcceptFriend = useCallback(async (relationId) => {
+    if (!token) {
+      alert("로그인 후 이용해주세요.");
+      return;
+    }
+
+    try {
+      const res = await fetch("http://localhost:3010/friends/accept", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          relation_id: relationId
+        })
+      });
+
+      const data = await res.json();
+      alert(data.msg);
+      if (data.result) {
+        fetchNotifications();
+        // 알림 개수 다시 조회
+        fetch("http://localhost:3010/notifications/unread-count", {
+          headers: { "Authorization": `Bearer ${token}` }
+        })
+          .then(res => res.json())
+          .then(data => {
+            if (data.result) {
+              setUnreadCount(data.count);
+            }
+          });
+      }
+    } catch (err) {
+      console.error("친구 요청 수락 오류:", err);
+      alert("친구 요청 수락 중 오류가 발생했습니다.");
+    }
+  }, [token, fetchNotifications]);
 
   // 신고 수정 핸들러
   const handleEditReport = (report) => {
@@ -340,9 +417,13 @@ function ChildAbuseReports() {
           </Box>
 
           <Box>
-            <IconButton color="primary"><ChatBubbleOutlineIcon /></IconButton>
+            <IconButton color="primary" onClick={() => navigate('/messages')}><ChatBubbleOutlineIcon /></IconButton>
             <IconButton color="primary" onClick={() => navigate('/feed')}><HomeIcon /></IconButton>
-            <IconButton color="primary"><NotificationsNoneIcon /></IconButton>
+            <IconButton color="primary" onClick={() => { setNotificationMenuOpen(true); fetchNotifications(); }}>
+              <Badge badgeContent={unreadCount} color="error">
+                <NotificationsNoneIcon />
+              </Badge>
+            </IconButton>
           </Box>
 
           {/* 수정: 프로필 Avatar 클릭 시 메뉴 */}
@@ -380,7 +461,7 @@ function ChildAbuseReports() {
           {reports.length > 0 ? (
             <Grid2 container spacing={3}>
               {reports.map((report) => (
-                <Grid2 item xs={12} key={report.report_id}>
+                <Grid2 xs={12} key={report.report_id}>
                   <AbuseReportCard report={report} onClick={handleOpenModal} />
                 </Grid2>
               ))}
@@ -555,6 +636,68 @@ function ChildAbuseReports() {
           }}>취소</Button>
           <Button onClick={handleEditReportSubmit} variant="contained" color="primary">수정</Button>
         </DialogActions>
+      </Dialog>
+
+      {/* 알림 다이얼로그 */}
+      <Dialog 
+        open={notificationMenuOpen} 
+        onClose={() => setNotificationMenuOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          알림
+          <Button 
+            size="small" 
+            onClick={fetchNotifications}
+            sx={{ float: 'right' }}
+          >
+            새로고침
+          </Button>
+        </DialogTitle>
+        <DialogContent>
+          {notifications.length > 0 ? (
+            <List>
+              {notifications.map((notification) => (
+                <ListItem 
+                  key={notification.notification_id}
+                  sx={{ 
+                    backgroundColor: notification.is_read ? 'transparent' : '#f0f2ff',
+                    mb: 1,
+                    borderRadius: 1
+                  }}
+                >
+                  <ListItemAvatar>
+                    <Avatar sx={{ bgcolor: '#1877f2' }}>
+                      {notification.type === 'friend_request' ? '👤' : '✓'}
+                    </Avatar>
+                  </ListItemAvatar>
+                  <ListItemText
+                    primary={notification.message}
+                    secondary={new Date(notification.created_at).toLocaleString('ko-KR')}
+                  />
+                  {notification.type === 'friend_request' && (
+                    <Button
+                      variant="contained"
+                      color="primary"
+                      size="small"
+                      onClick={() => {
+                        handleAcceptFriend(notification.related_id);
+                      }}
+                      sx={{ ml: 2 }}
+                    >
+                      수락
+                    </Button>
+                  )}
+                </ListItem>
+              ))}
+            </List>
+          ) : (
+            <Box sx={{ textAlign: 'center', py: 4 }}>
+              <Typography color="textSecondary">알림이 없습니다.</Typography>
+            </Box>
+          )}
+        </DialogContent>
       </Dialog>
     </Box>
   );

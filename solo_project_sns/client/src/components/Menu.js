@@ -10,7 +10,8 @@ import {
   Box,
   Avatar,
   Collapse,
-  Divider
+  Divider,
+  Badge
 } from '@mui/material';
 import {
   Home as HomeIcon,
@@ -19,7 +20,8 @@ import {
   Favorite as SupportIcon,
   ExpandLess,
   ExpandMore,
-  LocationCity as LocationCityIcon
+  LocationCity as LocationCityIcon,
+  ChatBubbleOutline as MessageIcon
 } from '@mui/icons-material';
 import { Link, useLocation } from 'react-router-dom';
 import { jwtDecode } from 'jwt-decode';
@@ -56,7 +58,12 @@ const extractRegionKeyword = (regionName) => {
 function Menu() {
   const [openChildSearch, setOpenChildSearch] = useState(false);
   const [regions, setRegions] = useState([]); // DB에서 가져온 지역 목록 (키워드로 그룹화됨)
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [unreadMessages, setUnreadMessages] = useState(0);
   const location = useLocation();
+
+  const token = localStorage.getItem("token");
+  const decode = token ? jwtDecode(token) : {};
 
   // ============================================================
   // DB에서 지역 목록 조회 및 키워드로 그룹화
@@ -118,6 +125,42 @@ function Menu() {
     loadRegions();
   }, [loadRegions]);
 
+  // 읽지 않은 알림 및 메시지 개수 조회
+  const fetchUnreadCounts = useCallback(() => {
+    if (!token) return;
+
+    // 읽지 않은 알림 개수
+    fetch("http://localhost:3010/notifications/unread-count", {
+      headers: { "Authorization": `Bearer ${token}` }
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.result) {
+          setUnreadNotifications(data.count);
+        }
+      })
+      .catch(err => console.error("알림 개수 조회 실패:", err));
+
+    // 읽지 않은 메시지 개수
+    fetch("http://localhost:3010/messages/unread/count", {
+      headers: { "Authorization": `Bearer ${token}` }
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.result) {
+          setUnreadMessages(data.count);
+        }
+      })
+      .catch(err => console.error("메시지 개수 조회 실패:", err));
+  }, [token]);
+
+  useEffect(() => {
+    fetchUnreadCounts();
+    // 10초마다 개수 갱신
+    const interval = setInterval(fetchUnreadCounts, 10000);
+    return () => clearInterval(interval);
+  }, [fetchUnreadCounts]);
+
   const handleClickChildSearch = () => {
     setOpenChildSearch(!openChildSearch);
   };
@@ -132,9 +175,6 @@ function Menu() {
     minWidth: 40,
     color: '#1c1e21',
   };
-
-  const token = localStorage.getItem("token");
-  const decode = token ? jwtDecode(token) : {};
 
   const profileName = decode?.userName || "사용자";
   const profileImage = decode?.profileImage
@@ -172,15 +212,15 @@ function Menu() {
 
       <List sx={{ pt: 1 }}>
 
-        <ListItem button component={Link} to="/feed" selected={location.pathname === '/feed'}>
+        <ListItem component={Link} to="/feed" selected={location.pathname === '/feed'} sx={{ cursor: 'pointer' }}>
           <ListItemIcon sx={menuIconStyle}><HomeIcon /></ListItemIcon>
           <ListItemText primary="피드" primaryTypographyProps={{ style: menuItemStyle }} />
         </ListItem>
 
         <ListItem
-          button
           onClick={handleClickChildSearch}
           selected={location.pathname.startsWith('/childAbuseReports') || openChildSearch}
+          sx={{ cursor: 'pointer' }}
         >
           <ListItemIcon sx={menuIconStyle}><SearchIcon /></ListItemIcon>
           <ListItemText primary="아동 찾기" primaryTypographyProps={{ style: menuItemStyle }} />
@@ -190,11 +230,10 @@ function Menu() {
         <Collapse in={openChildSearch} timeout="auto" unmountOnExit>
           <List component="div" disablePadding sx={{ pl: 2, backgroundColor: '#f0f0f0' }}>
             <ListItem
-              button
               component={Link}
               to="/childAbuseReports"
               selected={location.pathname === '/childAbuseReports'}
-              sx={{ py: 1 }}
+              sx={{ py: 1, cursor: 'pointer' }}
             >
               <ListItemIcon sx={{ minWidth: 32 }}><LocationCityIcon fontSize="small" /></ListItemIcon>
               <ListItemText primary="전체 목록" primaryTypographyProps={{ fontSize: '14px', fontWeight: 500 }} />
@@ -211,12 +250,11 @@ function Menu() {
                 
                 return (
                   <ListItem
-                    button
                     key={region.region_id}
                     component={Link}
                     to={`/childAbuseReports/${encodeURIComponent(keyword)}`}
                     selected={location.pathname === `/childAbuseReports/${encodeURIComponent(keyword)}`}
-                    sx={{ py: 1 }}
+                    sx={{ py: 1, cursor: 'pointer' }}
                   >
                     <ListItemText
                       primary={keyword}
@@ -236,13 +274,22 @@ function Menu() {
           </List>
         </Collapse>
 
-        <ListItem button component={Link} to="/friends" selected={location.pathname === '/friends'}>
+        <ListItem component={Link} to="/friends" selected={location.pathname === '/friends'} sx={{ cursor: 'pointer' }}>
           <ListItemIcon sx={menuIconStyle}><FriendsIcon /></ListItemIcon>
           <ListItemText primary="친구" primaryTypographyProps={{ style: menuItemStyle }} />
         </ListItem>
 
+        <ListItem component={Link} to="/messages" selected={location.pathname === '/messages'} sx={{ cursor: 'pointer' }}>
+          <ListItemIcon sx={menuIconStyle}>
+            <Badge badgeContent={unreadMessages} color="error">
+              <MessageIcon />
+            </Badge>
+          </ListItemIcon>
+          <ListItemText primary="메시지" primaryTypographyProps={{ style: menuItemStyle }} />
+        </ListItem>
+
         {/* ✔ 수정됨: 후원 메뉴 정상 동작 */}
-        <ListItem button component={Link} to="/donations" selected={location.pathname === '/donations'}>
+        <ListItem component={Link} to="/donations" selected={location.pathname === '/donations'} sx={{ cursor: 'pointer' }}>
           <ListItemIcon sx={menuIconStyle}><SupportIcon /></ListItemIcon>
           <ListItemText primary="후원" primaryTypographyProps={{ style: menuItemStyle }} />
         </ListItem>

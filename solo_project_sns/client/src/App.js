@@ -11,6 +11,7 @@ import Menu from './components/Menu';
 import Donations from './components/Donations';
 import ChildAbuseReports from './components/ChildAbuseReports';
 import Friends from './components/Friends';
+import Messages from './components/Messages';
 
 
 function App() {
@@ -34,6 +35,7 @@ function App() {
           <Route path="/donations" element={<Donations />} />
           <Route path="/childAbuseReports/:regionName?" element={<ChildAbuseReports />} />
           <Route path="/friends" element={<Friends />} />
+          <Route path="/messages" element={<Messages />} />
 
           {/* 🔥 필수: /mui 오류 해결 라우트 */}
           <Route path="/mui" element={<div />} />

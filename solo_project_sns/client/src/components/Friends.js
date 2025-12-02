@@ -20,8 +20,7 @@ import {
     List,
     ListItem,
     ListItemText,
-    ListItemAvatar,
-    ListItemButton
+    ListItemAvatar
 } from '@mui/material';
 import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline';
 import HomeIcon from '@mui/icons-material/Home';
@@ -52,10 +51,12 @@ function Friends() {
         }
         try {
             const decoded = jwtDecode(token);
-            setCurrentUserId(Number(decoded.userId));
+            const userId = decoded.userId;
+            console.log("디코딩된 userId:", userId, "타입:", typeof userId);
+            setCurrentUserId(userId); // 타입 변환 없이 그대로 사용
             
             // 현재 사용자 프로필 정보 가져오기
-            fetch(`http://localhost:3010/users/${decoded.userId}/profile`)
+            fetch(`http://localhost:3010/users/${userId}/profile`)
                 .then(res => res.json())
                 .then(data => {
                     if (data.result && data.user) {
@@ -74,15 +75,26 @@ function Friends() {
         const token = localStorage.getItem("token");
         if (!token) return;
 
+        console.log("유저 목록 조회 시작, currentUserId:", currentUserId);
+
         try {
             const res = await fetch("http://localhost:3010/users", {
                 headers: { "Authorization": `Bearer ${token}` }
             });
+            
+            if (!res.ok) {
+                console.error("API 응답 오류:", res.status);
+                return;
+            }
+
             const data = await res.json();
+            console.log("유저 목록 조회 결과:", data);
 
             if (data.result && data.list) {
+                console.log("전체 유저 수:", data.list.length);
                 // 현재 로그인 유저 제외
                 const filteredUsers = data.list.filter(user => String(user.user_id) !== String(currentUserId));
+                console.log("필터링된 유저 수:", filteredUsers.length);
                 setUsers(filteredUsers);
                 if (currentUserId) checkFriendStatuses(filteredUsers, currentUserId);
             } else {
@@ -185,10 +197,16 @@ function Friends() {
     // 친구 요청
     const handleAddFriend = async (receiverId) => {
         const token = localStorage.getItem("token");
-        if (!token || !currentUserId) {
+        if (!token) {
             alert("로그인 후 이용해주세요.");
             return;
         }
+
+        // 토큰에서 직접 userId 가져오기
+        const decoded = jwtDecode(token);
+        const senderId = decoded.userId;
+
+        console.log("친구 요청:", { senderId, receiverId, currentUserId });
 
         try {
             const res = await fetch("http://localhost:3010/friends", {
@@ -198,11 +216,19 @@ function Friends() {
                     "Authorization": `Bearer ${token}`
                 },
                 body: JSON.stringify({
-                    requester_id: currentUserId,
+                    requester_id: senderId,
                     receiver_id: receiverId,
                 })
             });
+            
+            if (!res.ok) {
+                console.error("친구 요청 API 오류:", res.status);
+                alert("친구 요청 중 서버 오류가 발생했습니다.");
+                return;
+            }
+
             const data = await res.json();
+            console.log("친구 요청 결과:", data);
             alert(data.msg);
             if (data.result) {
                 fnUsers();
@@ -223,6 +249,8 @@ function Friends() {
             return;
         }
 
+        console.log("친구 요청 수락:", { relationId });
+
         try {
             const res = await fetch("http://localhost:3010/friends/accept", {
                 method: "PUT",
@@ -234,7 +262,15 @@ function Friends() {
                     relation_id: relationId
                 })
             });
+            
+            if (!res.ok) {
+                console.error("친구 수락 API 오류:", res.status);
+                alert("친구 요청 수락 중 서버 오류가 발생했습니다.");
+                return;
+            }
+
             const data = await res.json();
+            console.log("친구 수락 결과:", data);
             alert(data.msg);
             if (data.result) {
                 fnUsers();
@@ -359,7 +395,7 @@ function Friends() {
                     {users.length > 0 ? (
                         <Grid2 container spacing={3}>
                             {users.map((user) => (
-                                <Grid2 item xs={12} sm={6} md={4} lg={3} key={user.user_id}>
+                                <Grid2 xs={12} sm={6} md={4} lg={3} key={user.user_id}>
                                     <UserCard user={user} />
                                 </Grid2>
                             ))}

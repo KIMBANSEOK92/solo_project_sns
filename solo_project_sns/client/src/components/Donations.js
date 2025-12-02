@@ -18,9 +18,17 @@ import {
   TextField,
   Menu,
   MenuItem,
-  Divider
+  Divider,
+  Badge,
+  List,
+  ListItem,
+  ListItemAvatar,
+  ListItemText
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
+import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline';
+import HomeIcon from '@mui/icons-material/Home';
+import NotificationsNoneIcon from '@mui/icons-material/NotificationsNone';
 import { jwtDecode } from 'jwt-decode';
 import { useNavigate } from "react-router-dom";
 
@@ -85,6 +93,9 @@ function Donations() {
   const [donationMessage, setDonationMessage] = useState('');
   const [editingDonation, setEditingDonation] = useState(null);
   const [currentUserProfile, setCurrentUserProfile] = useState(null);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [notificationMenuOpen, setNotificationMenuOpen] = useState(false);
+  const [notifications, setNotifications] = useState([]);
   const [anchorEl, setAnchorEl] = useState(null); // 🔹 메뉴용 상태
   const navigate = useNavigate();
 
@@ -92,7 +103,7 @@ function Donations() {
   const decode = token ? jwtDecode(token) : {};
   const userId = decode?.userId;
 
-  // 현재 사용자 프로필 정보 가져오기
+  // 현재 사용자 프로필 정보 및 알림 개수 가져오기
   useEffect(() => {
     if (userId) {
       fetch(`http://localhost:3010/users/${userId}/profile`)
@@ -103,8 +114,22 @@ function Donations() {
           }
         })
         .catch(err => console.error("프로필 조회 실패:", err));
+
+      // 읽지 않은 알림 개수 조회
+      if (token) {
+        fetch("http://localhost:3010/notifications/unread-count", {
+          headers: { "Authorization": `Bearer ${token}` }
+        })
+          .then(res => res.json())
+          .then(data => {
+            if (data.result) {
+              setUnreadCount(data.count);
+            }
+          })
+          .catch(err => console.error("알림 개수 조회 실패:", err));
+      }
     }
-  }, [userId]);
+  }, [userId, token]);
 
   const loadDonationList = useCallback(() => {
     fetch("http://localhost:3010/donation/list")
@@ -199,6 +224,63 @@ function Donations() {
     }
   };
 
+  // 알림 목록 조회
+  const fetchNotifications = useCallback(async () => {
+    if (!token) return;
+
+    try {
+      const res = await fetch("http://localhost:3010/notifications", {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.result && data.list) {
+        setNotifications(data.list);
+      }
+    } catch (err) {
+      console.error("알림 조회 오류:", err);
+    }
+  }, [token]);
+
+  // 친구 요청 수락
+  const handleAcceptFriend = useCallback(async (relationId) => {
+    if (!token) {
+      alert("로그인 후 이용해주세요.");
+      return;
+    }
+
+    try {
+      const res = await fetch("http://localhost:3010/friends/accept", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          relation_id: relationId
+        })
+      });
+
+      const data = await res.json();
+      alert(data.msg);
+      if (data.result) {
+        fetchNotifications();
+        // 알림 개수 다시 조회
+        fetch("http://localhost:3010/notifications/unread-count", {
+          headers: { "Authorization": `Bearer ${token}` }
+        })
+          .then(res => res.json())
+          .then(data => {
+            if (data.result) {
+              setUnreadCount(data.count);
+            }
+          });
+      }
+    } catch (err) {
+      console.error("친구 요청 수락 오류:", err);
+      alert("친구 요청 수락 중 오류가 발생했습니다.");
+    }
+  }, [token, fetchNotifications]);
+
   // 🔹 메뉴 관련 핸들러
   const handleMenuOpen = (event) => setAnchorEl(event.currentTarget);
   const handleMenuClose = () => setAnchorEl(null);
@@ -214,6 +296,21 @@ function Donations() {
             <Typography variant="h6" sx={{ color: "#1877f2", fontWeight: "bold" }}>
               CP (Child Protection)
             </Typography>
+          </Box>
+
+          {/* 🔹 중앙 아이콘 메뉴 */}
+          <Box>
+            <IconButton color="primary" onClick={() => navigate('/messages')}>
+              <ChatBubbleOutlineIcon />
+            </IconButton>
+            <IconButton color="primary" onClick={() => navigate('/feed')}>
+              <HomeIcon />
+            </IconButton>
+            <IconButton color="primary" onClick={() => { setNotificationMenuOpen(true); fetchNotifications(); }}>
+              <Badge badgeContent={unreadCount} color="error">
+                <NotificationsNoneIcon />
+              </Badge>
+            </IconButton>
           </Box>
 
           {/* 🔹 우측 프로필 메뉴 */}
@@ -314,6 +411,68 @@ function Donations() {
           <Button variant="contained" onClick={handleDonate}>{editingDonation ? "수정하기" : "후원하기"}</Button>
           <Button onClick={handleCloseDonate}>취소</Button>
         </DialogActions>
+      </Dialog>
+
+      {/* 알림 다이얼로그 */}
+      <Dialog 
+        open={notificationMenuOpen} 
+        onClose={() => setNotificationMenuOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          알림
+          <Button 
+            size="small" 
+            onClick={fetchNotifications}
+            sx={{ float: 'right' }}
+          >
+            새로고침
+          </Button>
+        </DialogTitle>
+        <DialogContent>
+          {notifications.length > 0 ? (
+            <List>
+              {notifications.map((notification) => (
+                <ListItem 
+                  key={notification.notification_id}
+                  sx={{ 
+                    backgroundColor: notification.is_read ? 'transparent' : '#f0f2ff',
+                    mb: 1,
+                    borderRadius: 1
+                  }}
+                >
+                  <ListItemAvatar>
+                    <Avatar sx={{ bgcolor: '#1877f2' }}>
+                      {notification.type === 'friend_request' ? '👤' : '✓'}
+                    </Avatar>
+                  </ListItemAvatar>
+                  <ListItemText
+                    primary={notification.message}
+                    secondary={new Date(notification.created_at).toLocaleString('ko-KR')}
+                  />
+                  {notification.type === 'friend_request' && (
+                    <Button
+                      variant="contained"
+                      color="primary"
+                      size="small"
+                      onClick={() => {
+                        handleAcceptFriend(notification.related_id);
+                      }}
+                      sx={{ ml: 2 }}
+                    >
+                      수락
+                    </Button>
+                  )}
+                </ListItem>
+              ))}
+            </List>
+          ) : (
+            <Box sx={{ textAlign: 'center', py: 4 }}>
+              <Typography color="textSecondary">알림이 없습니다.</Typography>
+            </Box>
+          )}
+        </DialogContent>
       </Dialog>
     </Box>
   );
