@@ -330,8 +330,8 @@ function Donations() {
         </Toolbar>
       </AppBar>
 
-      <Box component="main" sx={{ marginTop: "80px", width: "100%", textAlign: "center" }}>
-        <Button variant="contained" color="primary" sx={{ mb: 3 }} onClick={handleOpenDonate}>
+      <Box component="main" sx={{ marginTop: "60px", width: "100%", textAlign: "center" }}>
+        <Button variant="contained" color="primary" sx={{ mb: 5, mt : 5}} onClick={handleOpenDonate}>
           후원하기
         </Button>
 

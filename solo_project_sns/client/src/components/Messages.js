@@ -231,7 +231,7 @@ function Messages() {
         component="main" 
         sx={{ 
           marginTop: '64px', 
-          marginLeft: '240px', 
+          marginLeft: '120px', 
           width: 'calc(100% - 240px)',
           display: 'flex',
           height: 'calc(100vh - 64px)',
@@ -247,8 +247,8 @@ function Messages() {
             {/* 친구 목록 표시 */}
             {friends.length > 0 && (
               <>
-                <Box sx={{ px: 2, py: 1, backgroundColor: '#f0f2f5' }}>
-                  <Typography variant="caption" sx={{ fontWeight: 'bold', color: '#65676b' }}>
+                <Box sx={{ px: 2, py: 1, backgroundColor: '#a6d0f6ff' }}>
+                  <Typography variant="caption" sx={{ fontWeight: 'bold', color: '#000000ff' }}>
                     친구 목록
                   </Typography>
                 </Box>

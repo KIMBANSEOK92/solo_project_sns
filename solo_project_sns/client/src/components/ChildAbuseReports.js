@@ -119,7 +119,7 @@ function ChildAbuseReports() {
       try {
         const decoded = jwtDecode(token);
         setCurrentUserId(decoded.userId);
-        
+
         // 현재 사용자 프로필 정보 가져오기
         fetch(`http://localhost:3010/users/${decoded.userId}/profile`)
           .then(res => res.json())
@@ -379,6 +379,7 @@ function ChildAbuseReports() {
       .then((data) => {
         if (data.result) {
           alert("아동 학대 신고가 완료되었습니다.");
+          window.dispatchEvent(new Event("regionsUpdated"));
           // 폼 초기화
           setNewReport({
             region_name: "",
@@ -639,16 +640,16 @@ function ChildAbuseReports() {
       </Dialog>
 
       {/* 알림 다이얼로그 */}
-      <Dialog 
-        open={notificationMenuOpen} 
+      <Dialog
+        open={notificationMenuOpen}
         onClose={() => setNotificationMenuOpen(false)}
         maxWidth="sm"
         fullWidth
       >
         <DialogTitle>
           알림
-          <Button 
-            size="small" 
+          <Button
+            size="small"
             onClick={fetchNotifications}
             sx={{ float: 'right' }}
           >
@@ -659,9 +660,9 @@ function ChildAbuseReports() {
           {notifications.length > 0 ? (
             <List>
               {notifications.map((notification) => (
-                <ListItem 
+                <ListItem
                   key={notification.notification_id}
-                  sx={{ 
+                  sx={{
                     backgroundColor: notification.is_read ? 'transparent' : '#f0f2ff',
                     mb: 1,
                     borderRadius: 1

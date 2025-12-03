@@ -34,7 +34,7 @@ import { jwtDecode } from 'jwt-decode';
 // ============================================================
 const extractRegionKeyword = (regionName) => {
   if (!regionName) return "";
-  
+
   // "XX특별시", "XX광역시", "XX시" 등에서 키워드 추출
   const patterns = [
     /^(.+?)특별시/,  // 서울특별시 → 서울
@@ -43,14 +43,14 @@ const extractRegionKeyword = (regionName) => {
     /^(.+?)도$/,     // 경기도 → 경기
     /^(.+?)군$/,     // 양평군 → 양평
   ];
-  
+
   for (const pattern of patterns) {
     const match = regionName.match(pattern);
     if (match && match[1]) {
       return match[1].trim();
     }
   }
-  
+
   // 패턴에 매치되지 않으면 원본 반환
   return regionName.trim();
 };
@@ -79,17 +79,17 @@ function Menu() {
       })
       .then((data) => {
         const regionsList = data.list || [];
-        
+
         // 키워드로 그룹화: 같은 키워드를 가진 지역 중 가장 짧은 이름을 대표로 사용
         // 예: "인천"과 "인천광역시" → 키워드 "인천" 하나로 그룹화
         const keywordMap = new Map();
-        
+
         regionsList.forEach((region) => {
           const keyword = extractRegionKeyword(region.region_name);
-          
+
           // 키워드를 추출할 수 없으면 원본 지역명을 키워드로 사용
           const finalKeyword = keyword || region.region_name;
-          
+
           // 이미 같은 키워드가 있으면, 이름이 더 짧은 것을 대표로 선택
           if (keywordMap.has(finalKeyword)) {
             const existing = keywordMap.get(finalKeyword);
@@ -108,11 +108,11 @@ function Menu() {
             });
           }
         });
-        
+
         // Map을 배열로 변환하여 키워드 이름으로 정렬
         const groupedRegions = Array.from(keywordMap.values());
         groupedRegions.sort((a, b) => a.keyword.localeCompare(b.keyword, 'ko'));
-        
+
         setRegions(groupedRegions);
       })
       .catch((err) => {
@@ -123,7 +123,15 @@ function Menu() {
 
   useEffect(() => {
     loadRegions();
-  }, [loadRegions]);
+    // ChildAbuseReports에서 보내는 이벤트 수신 → 메뉴 지역 갱신
+    const updateRegions = () => loadRegions();
+    window.addEventListener("regionsUpdated", updateRegions);
+
+    // 컴포넌트 언마운트 시 이벤트 제거
+    return () => {
+      window.removeEventListener("regionsUpdated", updateRegions);
+    };
+  }, []);
 
   // 읽지 않은 알림 및 메시지 개수 조회
   const fetchUnreadCounts = useCallback(() => {
@@ -164,6 +172,8 @@ function Menu() {
   const handleClickChildSearch = () => {
     setOpenChildSearch(!openChildSearch);
   };
+
+
 
   const menuItemStyle = {
     fontSize: '15px',
@@ -247,7 +257,7 @@ function Menu() {
               regions.map((region) => {
                 // 키워드로 메뉴에 표시하고, 검색 시에도 키워드로 검색
                 const keyword = region.keyword || extractRegionKeyword(region.region_name) || region.region_name;
-                
+
                 return (
                   <ListItem
                     key={region.region_id}

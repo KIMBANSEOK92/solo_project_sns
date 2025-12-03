@@ -387,7 +387,7 @@ function Friends() {
                     </Menu>
                 </Toolbar>
             </AppBar>
-            <Box component="main" sx={{ marginTop: '64px', marginLeft: '240px', width: 'calc(100% - 240px)', display: 'flex', justifyContent: 'center', padding: 4 }}>
+            <Box component="main" sx={{ marginTop: '64px', marginLeft: '130px', width: 'calc(100% - 240px)', display: 'flex', justifyContent: 'center', padding: 4 }}>
                 <Container maxWidth="lg">
                     <Typography variant="h5" gutterBottom sx={{ mb: 3, fontWeight: 'bold' }}>
                         알고 싶은 친구를 추가해보세요

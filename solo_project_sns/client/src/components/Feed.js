@@ -459,7 +459,7 @@ function Feed() {
         component="main" 
         sx={{ 
           marginTop: '64px', 
-          marginLeft: '240px', 
+          marginLeft: '140px', 
           width: 'calc(100% - 240px)',
           display: 'flex', 
           justifyContent: 'center',
@@ -473,7 +473,7 @@ function Feed() {
           maxWidth="sm" 
           sx={{ 
             width: '100%',
-            maxWidth: '600px !important',
+            maxWidth: '800px !important',
             px: { xs: 2, sm: 3 },
             mx: 'auto',
             display: 'flex',
