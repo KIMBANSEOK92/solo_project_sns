@@ -75,9 +75,9 @@
 
 - 사용자 간 자연스러운 소통 및 참여 유도
 
-|View|
-|....|
-||
+| View | 
+|------|
+|<img width="500" height="500" alt="메인 feed" src="https://github.com/user-attachments/assets/7cf3bb34-60dc-4d8a-a344-57e602edbd74" />|
 
 <br>
 
