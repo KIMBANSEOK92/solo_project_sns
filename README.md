@@ -98,6 +98,11 @@
 
 - 지역별 정보를 직관적으로 파악할 수 있도록 구성
 
+| View | 
+|------|
+|<img width="500" height="500" alt="아동찾기" src="https://github.com/user-attachments/assets/ece3b07c-616f-4bbb-8f58-a113ed0b898d" />|
+|<img width="500" height="500" alt="아동학대신고" src="https://github.com/user-attachments/assets/5434ce56-0a46-45d8-8f51-108ee95b0581" />|
+
 <br>
 
 ### ③ 친구(Friends)
@@ -111,6 +116,10 @@
 - 친구들의 게시글, 활동 내역을 쉽게 확인 가능
 
 - 커뮤니티 기반의 소통 확대
+
+| View | 
+|------|
+|<img width="500" height="500" alt="친구 추가" src="https://github.com/user-attachments/assets/87211b81-7991-4572-b987-e34eb8f664d8" />|
 
 <br>
 
@@ -127,6 +136,11 @@
 - 투명한 후원 내역 확인 가능
 
 - “작은 관심이 큰 변화를 만든다”는 메시지를 전달하는 공간
+
+| View | 
+|------|
+|<img width="500" height="500" alt="후원" src="https://github.com/user-attachments/assets/f3815ba4-b3a9-494d-81b9-63d17dc44123" />|
+|<img width="500" height="500" alt="후원하기" src="https://github.com/user-attachments/assets/aebf62ab-1a5e-4f72-ba8e-b2831edadbb6" />|
 
 <br>
 
