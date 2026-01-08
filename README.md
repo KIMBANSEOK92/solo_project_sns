@@ -123,7 +123,20 @@
 
 <br>
 
-### ④ 후원(Donations)
+### ④ 메세지(Messages)
+- 친구추가 시 해당 페이지에 자동목록으로 추가
+- 
+- 1:1 채팅이 기능 구현
+- 
+- 실시간으로 채팅 기능 구현
+
+| View | 
+|------|
+|<img width="500" height="500" alt="메세지 채팅" src="https://github.com/user-attachments/assets/c5fdce5a-a512-4355-8a95-338520404f49" />|
+
+<br>
+
+### ⑤ 후원(Donations)
 
 ##### 아동학대 피해 아동을 돕기 위한 후원 기능.
 
